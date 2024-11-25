@@ -1,0 +1,29 @@
+.header {
+  padding: 0 10px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px #f0f1f2;
+
+  &-user {
+    color: rgb(var(--primary-6));
+  }
+
+  &-tag {
+    min-width: 80px;
+    height: 28px;
+    margin-right: 10px;
+    font-size: 12px;
+    line-height: 28px;
+    color: rgb(0 0 0 / 50%);
+    text-align: center;
+    cursor: pointer;
+    background-color: #fff;
+    border-color: #eee;
+    border-radius: 4px;
+  }
+
+  &-tag-active {
+    color: #fff;
+    background-color: rgb(var(--primary-6));
+    border-color: transparent;
+  }
+}

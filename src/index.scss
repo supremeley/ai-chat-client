@@ -1,0 +1,125 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  font-weight: 400;
+  color: rgb(0 0 0 / 90%);
+
+  // font-stretch: expanded;
+  // line-height: 1.5;
+
+  color-scheme: light;
+  font-synthesis: none;
+
+  // background-color: #242424;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizelegibility;
+
+  --layout-header-height: 48px;
+  --layout-default-black: rgb(0 0 0 / 50%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: rgb(0 0 0 / 90%);
+
+    // background-color: #f2f3f5;
+  }
+}
+
+.arco-modal {
+  min-width: 720px;
+
+  &-close-icon {
+    transform: scale(1.5);
+  }
+}
+
+.arco-btn {
+  border-radius: 6px !important;
+
+  &-text {
+    display: flex;
+    align-items: center;
+  }
+}
+
+.arco-breadcrumb {
+  font-size: 18px;
+}
+
+// input::placeholder {
+//   color: #ececec;
+// }
+
+// .arco-input,
+// .arco-textarea {
+//   background-color: transparent !important;
+//   border: 1px solid #eee !important;
+
+//   &::placeholder {
+//     font-size: 12px;
+//   }
+// }
+
+.arco-input-inner-wrapper {
+  background-color: transparent !important;
+  border: 1px solid #eee !important;
+
+  input::placeholder {
+    font-size: 12px;
+  }
+}
+
+.arco-form-item-control-children {
+  .arco-input,
+  .arco-textarea {
+    background-color: transparent !important;
+    border: 1px solid #eee !important;
+
+    &::placeholder {
+      font-size: 12px;
+    }
+  }
+
+  .arco-input-inner-wrapper {
+    .arco-input {
+      border: 0 !important;
+    }
+  }
+}
+
+.arco-picker {
+  background-color: transparent !important;
+  border: 1px solid #eee !important;
+
+  input::placeholder {
+    font-size: 12px;
+  }
+}
+
+.arco-select-view {
+  background-color: transparent !important;
+  border: 1px solid #eee !important;
+
+  input::placeholder {
+    font-size: 12px;
+  }
+}
+
+.arco-breadcrumb-item:last-child {
+  font-weight: 400 !important;
+  color: var(--color-text-2) !important;
+}
+
+.arco-pagination-item-active {
+  background-color: rgba(var(--primary-6), 0.1) !important;
+}
+
+.arco-message {
+  padding: 28px 48px !important;
+
+  &-content {
+    font-size: 20px !important;
+  }
+}

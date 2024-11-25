@@ -1,0 +1,37 @@
+.use-form-container {
+  .arco-form-label-item {
+    min-width: 80px;
+  }
+
+  .arco-form-item-wrapper {
+    width: 100%;
+  }
+
+  .arco-form-layout-inline {
+    margin-right: 0;
+  }
+
+  .reset-button {
+    color: rgb(0 0 0 / 50%);
+    border: 1px solid #eee;
+
+    // background-color: red;
+  }
+
+  // .arco-form-item-control-children {
+  //   .arco-input {
+  //     background-color: transparent !important;
+  //     border: 1px solid #eee !important;
+
+  //     &::placeholder {
+  //       font-size: 12px;
+  //     }
+  //   }
+
+  //   .arco-input-inner-wrapper {
+  //     .arco-input {
+  //       border: 0 !important;
+  //     }
+  //   }
+  // }
+}

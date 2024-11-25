@@ -1,0 +1,40 @@
+.layout {
+  &-aside {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    background-color: #eee;
+
+    &__header {
+      display: flex;
+      align-items: flex-end;
+      padding: 12px 24px;
+      font-size: 20px;
+      font-weight: 500;
+
+      // color: var(--layout-default-black);
+      color: rgb(var(--primary-6));
+
+      &-logo {
+        display: flex;
+        align-items: center;
+        width: 24px;
+        height: 24px;
+        margin-right: 8px;
+      }
+    }
+
+    .collapse-header {
+      justify-content: center;
+      padding: 24px 0 12px;
+
+      .layout-aside__header-logo {
+        margin: 0;
+      }
+    }
+  }
+
+  &-footer {
+    height: var(--layout-header-height);
+  }
+}

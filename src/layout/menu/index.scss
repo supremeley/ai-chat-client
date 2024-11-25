@@ -1,0 +1,48 @@
+.menu {
+  background-color: transparent;
+
+  .menu-option {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    font-size: 16px;
+    line-height: 48px;
+    color: var(--layout-default-black);
+    background-color: transparent;
+  }
+}
+
+.arco-menu-light {
+  .arco-menu-item:hover {
+    color: rgb(var(--primary-6));
+  }
+
+  .arco-menu-inline-header {
+    color: rgb(var(--primary-6));
+    background-color: transparent;
+
+    &:hover {
+      .menu-option {
+        color: rgb(var(--primary-6)) !important;
+      }
+    }
+  }
+
+  .arco-menu-inline {
+    .arco-menu-inline-content {
+      padding-left: 1rem;
+    }
+  }
+}
+
+.arco-menu-collapse-button {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.arco-menu.arco-menu-collapse {
+  .arco-menu-pop-header {
+    padding: 0 12px;
+  }
+}
