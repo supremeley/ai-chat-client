@@ -151,8 +151,8 @@ const Heygen = () => {
     try {
       const res = await avatar.current.createStartAvatar({
         quality: AvatarQuality.High,
-        avatarName: 'Eric_public_pro2_20230608',
-        knowledgeId: '', // Or use a custom `knowledgeBase`.
+        avatarName: 'Wayne_20240711',
+        // knowledgeId: '', // Or use a custom `knowledgeBase`.
         voice: {
           rate: 1.5, // 0.5 ~ 1.5
           emotion: VoiceEmotion.EXCITED,
@@ -160,15 +160,22 @@ const Heygen = () => {
         language: 'zh-CN',
       });
 
+      console.log('res', res);
+
       setData(res);
       // default to voice mode
       await avatar.current?.startVoiceChat();
+      // await avatar.current?.startListening();
       setChatMode('voice_mode');
     } catch (error) {
       console.error('Error starting avatar session:', error);
     } finally {
       setIsLoadingSession(false);
     }
+  }
+
+  async function startListening() {
+    await avatar.current?.startListening();
   }
 
   return (
@@ -187,6 +194,9 @@ const Heygen = () => {
       </video>
       <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
         Start
+      </Button>
+      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startListening}>
+        Listening
       </Button>
     </div>
   );

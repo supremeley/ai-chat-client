@@ -23,6 +23,6 @@ enum Api {
 export const getHeygenToken = () => {
   return useHeygenAxios.post<HeygenSuccessResponse<HeygenTokenResult>>({
     url: Api.heygenToken,
-    headers: { 'x-api-key': 'ZDNjMDhmMGFkZmQ2NDEzZmE3OWIzY2MyYWU3ZjIwZTktMTczMTgyODU1Ng==' },
+    headers: { 'x-api-key': 'MzBjM2I0MThkMTBkNGIyMmE4ZDQ0YjE0YzZkYzU4ZjktMTczMjUwODMwOQ==' },
   });
 };

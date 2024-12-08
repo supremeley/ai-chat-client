@@ -2,6 +2,7 @@ import { Navigate } from 'react-router-dom';
 
 import Heygen from '@/views/heygen';
 import Login from '@/views/login';
+import Openai from '@/views/openai';
 
 export const WhiteList: RouteWithMetaObject[] = [
   {
@@ -21,6 +22,12 @@ export const WhiteList: RouteWithMetaObject[] = [
     id: 'Heygen',
     path: '/heygen',
     element: <Heygen />,
+    title: 'Heygen',
+  },
+  {
+    id: 'Openai',
+    path: '/openai',
+    element: <Openai />,
     title: 'Heygen',
   },
 ];
