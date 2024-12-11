@@ -6,7 +6,8 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strictNullChecks": true,
+    "allowJs": true,
     "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["config", "types", "*.config.ts"]
+  "include": ["config", "types", "*.config.ts", "src/utils"]
 }

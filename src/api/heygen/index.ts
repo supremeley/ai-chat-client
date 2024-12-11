@@ -21,8 +21,11 @@ enum Api {
 }
 
 export const getHeygenToken = () => {
-  return useHeygenAxios.post<HeygenSuccessResponse<HeygenTokenResult>>({
-    url: Api.heygenToken,
-    headers: { 'x-api-key': 'MzBjM2I0MThkMTBkNGIyMmE4ZDQ0YjE0YzZkYzU4ZjktMTczMjUwODMwOQ==' },
-  });
+  return useHeygenAxios.post<HeygenSuccessResponse<HeygenTokenResult>>(
+    {
+      url: Api.heygenToken,
+      headers: { 'x-api-key': 'MzBjM2I0MThkMTBkNGIyMmE4ZDQ0YjE0YzZkYzU4ZjktMTczMzg4ODcyOQ==' },
+    },
+    { needToken: false },
+  );
 };

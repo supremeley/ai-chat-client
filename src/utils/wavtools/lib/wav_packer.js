@@ -36,9 +36,7 @@ export class WavPacker {
    * @returns {ArrayBuffer}
    */
   static mergeBuffers(leftBuffer, rightBuffer) {
-    const tmpArray = new Uint8Array(
-      leftBuffer.byteLength + rightBuffer.byteLength
-    );
+    const tmpArray = new Uint8Array(leftBuffer.byteLength + rightBuffer.byteLength);
     tmpArray.set(new Uint8Array(leftBuffer), 0);
     tmpArray.set(new Uint8Array(rightBuffer), leftBuffer.byteLength);
     return tmpArray.buffer;
@@ -52,10 +50,7 @@ export class WavPacker {
    * @returns
    */
   _packData(size, arg) {
-    return [
-      new Uint8Array([arg, arg >> 8]),
-      new Uint8Array([arg, arg >> 8, arg >> 16, arg >> 24]),
-    ][size];
+    return [new Uint8Array([arg, arg >> 8]), new Uint8Array([arg, arg >> 8, arg >> 16, arg >> 24])][size];
   }
 
   /**
@@ -76,10 +71,7 @@ export class WavPacker {
     const output = [
       // Header
       'RIFF',
-      this._packData(
-        1,
-        4 + (8 + 24) /* chunk 1 length */ + (8 + 8) /* chunk 2 length */
-      ), // Length
+      this._packData(1, 4 + (8 + 24) /* chunk 1 length */ + (8 + 8) /* chunk 2 length */), // Length
       'WAVE',
       // chunk 1
       'fmt ', // Sub-chunk identifier
@@ -92,10 +84,7 @@ export class WavPacker {
       this._packData(0, bitsPerSample),
       // chunk 2
       'data', // Sub-chunk identifier
-      this._packData(
-        1,
-        (channels[0].length * channels.length * bitsPerSample) / 8
-      ), // Chunk length
+      this._packData(1, (channels[0].length * channels.length * bitsPerSample) / 8), // Chunk length
       data,
     ];
     const blob = new Blob(output, { type: 'audio/mpeg' });

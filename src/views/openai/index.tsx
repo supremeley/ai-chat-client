@@ -1,12 +1,15 @@
 import './index.scss';
 
-import { Button, Card, Form, type FormInstance, Input } from '@arco-design/web-react';
-// import WebSocket from 'ws';
-// import mic from 'mic';
-// import Speaker from 'speaker';
-// import { Readable } from 'stream';
+import { Button, Card, Form, type FormInstance, Input, Switch, Tag } from '@arco-design/web-react';
+import Row from '@arco-design/web-react/es/Grid/row';
 import TextArea from '@arco-design/web-react/es/Input/textarea';
+import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
+import { type StartAvatarResponse, StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
 import { RealtimeClient } from '@openai/realtime-api-beta';
+import type { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
+
+import { getHeygenToken } from '@/api/heygen';
+import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 
 const DefaultOpenAIKey =
   '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';
@@ -18,33 +21,62 @@ export interface LoginParams {
   instructions: string;
 }
 
+interface RealtimeEvent {
+  time: string;
+  source: 'client' | 'server';
+  count?: number;
+  event: Record<string, any>;
+}
+
 const OpenAI = () => {
-  const audioSocket = useRef<RealtimeClient | null>();
-  const mediaStack = useRef<MediaStream>();
-  // // let audioCtx;
-  const scriptNode = useRef<ScriptProcessorNode>();
-  const source = useRef<MediaStreamAudioSourceNode>();
+  const clientRef = useRef<RealtimeClient | null>(null);
+
+  const wavRecorderRef = useRef<WavRecorder>(new WavRecorder({ sampleRate: 24000 }));
+
+  const wavStreamPlayerRef = useRef<WavStreamPlayer>(new WavStreamPlayer({ sampleRate: 24000 }));
+
+  const [items, setItems] = useState<ItemType[]>([]);
+  const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
 
   const formRef = useRef<FormInstance<LoginParams>>(null);
 
-  // useEffect(() => {
-  //   fetchData();
-  //   // startCall();
-  // }, []);
+  useEffect(() => {
+    console.log(items.at(-1));
+    items.at(-1)?.formatted?.text && handleSpeak(items.at(-1)?.formatted?.text);
+  }, [items]);
+
+  useEffect(() => {
+    return () => {
+      // cleanup; resets to defaults
+      clientRef.current?.reset();
+    };
+  }, []);
 
   const [isConnect, setIsConnect] = useState(false);
 
   const initOpenAi = async () => {
+    // const client = clientRef.current;
+    const wavRecorder = wavRecorderRef.current;
+    const wavStreamPlayer = wavStreamPlayerRef.current;
+
     try {
       const res = await formRef.current?.validate();
 
+      await wavRecorder.begin();
+      await wavStreamPlayer.connect();
+
       if (res) {
-        fetchOpenAi(res);
+        connectConversation(res);
       }
+
+      // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
     } catch (e) {}
   };
 
-  const fetchOpenAi = async (conf: LoginParams) => {
+  const connectConversation = useCallback(async (conf: LoginParams) => {
+    const wavRecorder = wavRecorderRef.current;
+    const wavStreamPlayer = wavStreamPlayerRef.current;
+
     const client = new RealtimeClient({
       dangerouslyAllowAPIKeyInBrowser: true,
       apiKey: conf.apiKey,
@@ -52,324 +84,370 @@ const OpenAI = () => {
 
     client.updateSession({ instructions: conf.instructions });
     client.updateSession({ voice: 'alloy' });
-    client.updateSession({
-      turn_detection: { type: 'server_vad' }, // or 'server_vad'
-      input_audio_transcription: { model: 'whisper-1' },
-    });
+    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
 
-    // client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
-    //   setRealtimeEvents((realtimeEvents) => {
-    //     const lastEvent = realtimeEvents[realtimeEvents.length - 1];
-    //     if (lastEvent?.event.type === realtimeEvent.event.type) {
-    //       // if we receive multiple events in a row, aggregate them for display purposes
-    //       lastEvent.count = (lastEvent.count || 0) + 1;
-    //       return realtimeEvents.slice(0, -1).concat(lastEvent);
-    //     } else {
-    //       return realtimeEvents.concat(realtimeEvent);
-    //     }
-    //   });
-    // });
+    if (isVadmode) {
+      client.updateSession({
+        turn_detection: { type: 'server_vad' },
+      });
+    }
+
+    client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
+      setRealtimeEvents((realtimeEvents) => {
+        const lastEvent = realtimeEvents[realtimeEvents.length - 1];
+        if (lastEvent?.event.type === realtimeEvent.event.type) {
+          // if we receive multiple events in a row, aggregate them for display purposes
+          lastEvent.count = (lastEvent.count || 0) + 1;
+          return realtimeEvents.slice(0, -1).concat(lastEvent);
+        } else {
+          return realtimeEvents.concat(realtimeEvent);
+        }
+      });
+    });
 
     client.on('error', (event) => {
       console.log('error', event);
       // do thing
     });
 
-    client.on('conversation.interrupted', (event) => {
+    client.on('conversation.interrupted', async (event) => {
       /* do something */
       console.log('conversation.interrupted', event);
+
+      const trackSampleOffset = await wavStreamPlayer.interrupt();
+
+      if (trackSampleOffset?.trackId) {
+        const { trackId, offset } = trackSampleOffset;
+        client.cancelResponse(trackId, offset);
+      }
     });
 
-    client.on('conversation.updated', (event) => {
-      // Set up event handling
-      console.log('conversation.updated', event);
-      const { item, delta } = event;
-      const items = client.conversation.getItems();
-      // console.log('conversation.updated items', items);
+    client.on('conversation.updated', async ({ item, delta }) => {
+      console.log('conversation.updated delta', delta);
+      console.log('conversation.updated item', item);
+
+      if (delta?.audio) {
+        console.log('1');
+        wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+      }
+
       if (item.status === 'completed' && item.formatted.audio?.length) {
-        switch (item.type) {
-          case 'message':
-            playAudio(item.formatted.audio);
-            // system, user, or assistant message (item.role)
-            break;
-          case 'function_call':
-            // always a function call from the model
-            break;
-          case 'function_call_output':
-            // always a response from the user / application
-            break;
-        }
+        console.log('2');
+        const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
+        item.formatted.file = wavFile;
       }
 
-      if (delta) {
-        // Only one of the following will be populated for any given event
-        // delta.audio = Int16Array, audio added
-        // delta.transcript = string, transcript added
-        // delta.arguments = string, function arguments added
-      }
+      const items = client.conversation.getItems();
+
+      setItems(items);
     });
 
-    // client.on('conversation.item.appended', (event) => {
-    //   console.log('Conversation item appended:', event);
-
-    //   // if (item.type === 'message') {
-    //   //   console.log('Playing audio response...');
-    //   //   // playAudio(item.formatted.audio);
-    //   // } else {
-    //   //   console.log('No audio content in this item.');
-    //   // }
-    // });
-
-    // client.on('conversation.item.completed', ({ item }) => {
-    //   console.log('Conversation item completed:', item);
-
-    //   if (item.type === 'message') {
-    //     console.log('Playing audio response...');
-    //     // playAudio(item.formatted.audio);
-    //   } else {
-    //     console.log('No audio content in this item.');
-    //   }
-    // });
+    setItems(client.conversation.getItems());
 
     await client.connect();
 
-    audioSocket.current = client;
+    client.sendUserMessageContent([
+      {
+        type: `input_text`,
+        text: `Hello!`,
+        // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
+      },
+    ]);
+
+    if (isVadmode) {
+      await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
+    }
+
+    clientRef.current = client;
 
     setIsConnect(true);
-  };
+    setRealtimeEvents([]);
+    setItems(client.conversation.getItems());
+  }, []);
 
-  // function startAudioStream() {
-  //   try {
-  //     micInstance = mic({
-  //       rate: '24000',
-  //       channels: '1',
-  //       debug: false,
-  //       exitOnSilence: 6,
-  //       fileType: 'raw',
-  //       encoding: 'signed-integer',
-  //     });
+  const disconnectConversation = useCallback(async () => {
+    setIsConnect(false);
+    setRealtimeEvents([]);
+    setItems([]);
+    // setMemoryKv({});
 
-  //     const micInputStream = micInstance.getAudioStream();
+    const client = clientRef.current;
+    client?.disconnect();
 
-  //     micInputStream.on('error', (error) => {
-  //       console.error('Microphone error:', error);
-  //     });
+    const wavRecorder = wavRecorderRef.current;
+    await wavRecorder.end();
 
-  //     micInstance.start();
-  //     console.log('Microphone started streaming.');
-
-  //     let audioBuffer = Buffer.alloc(0);
-  //     const chunkSize = 4800; // 0.2 seconds of audio at 24kHz
-
-  //     micInputStream.on('data', (data) => {
-  //       audioBuffer = Buffer.concat([audioBuffer, data]);
-
-  //       while (audioBuffer.length >= chunkSize) {
-  //         const chunk = audioBuffer.slice(0, chunkSize);
-  //         audioBuffer = audioBuffer.slice(chunkSize);
-
-  //         const int16Array = new Int16Array(chunk.buffer, chunk.byteOffset, chunk.length / 2);
-
-  //         try {
-  //           client.appendInputAudio(int16Array);
-  //         } catch (error) {
-  //           console.error('Error sending audio data:', error);
-  //         }
-  //       }
-  //     });
-
-  //     micInputStream.on('silence', () => {
-  //       console.log('Silence detected, creating response...');
-  //       try {
-  //         client.createResponse();
-  //       } catch (error) {
-  //         console.error('Error creating response:', error);
-  //       }
-  //     });
-  //   } catch (error) {
-  //     console.error('Error starting audio stream:', error);
-  //   }
-  // }
-
-  // function playAudio(audioData) {
-  //   try {
-  //     if (!speaker) {
-  //       speaker = new Speaker({
-  //         channels: 1,
-  //         bitDepth: 16,
-  //         sampleRate: 24000,
-  //       });
-  //     }
-
-  //     // Convert Int16Array to Buffer
-  //     const buffer = Buffer.from(audioData.buffer);
-
-  //     // Create a readable stream from the buffer
-  //     const readableStream = new Readable({
-  //       read() {
-  //         this.push(buffer);
-  //         this.push(null);
-  //       },
-  //     });
-
-  //     // Pipe the stream to the speaker
-  //     readableStream.pipe(speaker);
-  //     console.log('Audio sent to speaker for playback. Buffer length:', buffer.length);
-
-  //     // Handle the 'close' event to recreate the speaker for the next playback
-  //     speaker.on('close', () => {
-  //       console.log('Speaker closed. Recreating for next playback.');
-  //       speaker = null;
-  //     });
-  //   } catch (error) {
-  //     console.error('Error playing audio:', error);
-  //   }
-  // }
-
-  // Connect to Realtime API
-
-  // Send a item and triggers a generation
-  // client.sendUserMessageContent([{ type: 'input_text', text: `How are you?` }]);
-
-  // const audioSocket = useRef<WebSocket | null>();
-  // const mediaStack = useRef<MediaStream>();
-  // // let audioCtx;
-  // const scriptNode = useRef<ScriptProcessorNode>();
-  // const source = useRef<MediaStreamAudioSourceNode>();
-  // // let play;
-
-  // const [isInChannel, setIsInChannel] = useState(false);
-
-  // const connectAudioWebSocket = (audioCtx: AudioContext) => {
-  //   const url = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
-  //   const apikey = '';
-
-  //   audioSocket.current = new WebSocket(url, {
-  //     headers: {
-  //       Authorization: 'Bearer ' + apikey,
-  //       'OpenAI-Beta': 'realtime=v1',
-  //     },
-  //   });
-
-  //   audioSocket.current.onopen = () => {
-  //     console.log('audioSocket connected');
-  //   };
-
-  //   audioSocket.current.onmessage = (event) => {
-  //     // 将接收的数据转换成与传输过来的数据相同的Float32Array
-  //     console.log('audioSocket message:', event.data);
-
-  // 使用AudioBufferSourceNode播放音频
-  function playAudio(audio: Int16Array) {
-    if (audio.length) {
-      const audioCtx = new AudioContext();
-
-      const audioBuffer = audioCtx.createBuffer(1, audio.length, 24000);
-
-      const channelData = audioBuffer.getChannelData(0);
-
-      channelData.set(audio);
-
-      const s = audioCtx.createBufferSource();
-
-      s.buffer = audioBuffer;
-
-      // const gainNode = audioCtx.createGain();
-
-      s.connect(audioCtx.destination);
-
-      // gainNode.connect(audioCtx.destination);
-
-      // const muteValue = 1;
-
-      // if (!play) {
-      //   // 是否静音
-      //   muteValue = 0;
-      // }
-
-      // gainNode.gain.setValueAtTime(muteValue, audioCtx.currentTime);
-
-      s.start();
-    }
-  }
-
-  function sendText() {
-    audioSocket.current?.sendUserMessageContent([{ type: 'input_text', text: `How are you?` }]);
-  }
-
-  function startCall() {
-    // setIsInChannel(true);
-    // play = true;
-    const audioCtx = new AudioContext();
-
-    // connectAudioWebSocket(audioCtx);
-
-    // 该变量存储当前MediaStreamAudioSourceNode的引用
-    // 可以通过它关闭麦克风停止音频传输
-
-    // 创建一个ScriptProcessorNode 用于接收当前麦克风的音频
-    scriptNode.current = audioCtx.createScriptProcessor(4096, 1, 1);
-
-    navigator.mediaDevices
-      .getUserMedia({ audio: true, video: false })
-      .then((stream) => {
-        mediaStack.current = stream;
-
-        source.current = audioCtx.createMediaStreamSource(stream);
-
-        scriptNode?.current && source.current?.connect(scriptNode.current);
-
-        scriptNode.current?.connect(audioCtx.destination);
-      })
-      .catch(function (err) {
-        /* 处理error */
-        console.log('err', err);
-        // setIsInChannel(false);
-      });
-
-    // 当麦克风有声音输入时，会调用此事件
-    // 实际上麦克风始终处于打开状态时，即使不说话，此事件也在一直调用
-    scriptNode.current.addEventListener('audioprocess', (audioProcessingEvent) => {
-      console.log('audioProcessingEvent', audioProcessingEvent);
-
-      const inputBuffer = audioProcessingEvent.inputBuffer;
-      // console.log("inputBuffer",inputBuffer);
-      // 由于只创建了一个音轨，这里只取第一个频道的数据
-      const inputData = inputBuffer.getChannelData(0);
-      // 通过socket传输数据，实际上传输的是Float32Array
-      // if (audioSocket.current?.readyState === 1) {
-      // console.log("发送的数据",inputData);
-      // audioSocket.value.send(inputData);Í
-      // const jsonData = JSON.stringify(inputData);
-
-      const intArray = new Int16Array(inputData.map((value) => Math.round(value)));
-      console.log('intArray', intArray);
-
-      // audioSocket.current?.sendUserMessageContent({ audio: intArray });
-
-      audioSocket.current?.appendInputAudio(intArray);
-
-      audioSocket.current?.createResponse();
-    });
-  }
-
-  // // 关闭麦克风
-  const stopCall = () => {
-    // setIsInChannel(false);
-    // play = false;
-    mediaStack.current?.getTracks()[0].stop();
-    scriptNode.current?.disconnect();
-
-    if (audioSocket.current) {
-      // audioSocket.current.cancelResponse();
-      audioSocket.current = null;
-    }
-  };
+    const wavStreamPlayer = wavStreamPlayerRef.current;
+    await wavStreamPlayer.interrupt();
+  }, []);
 
   const [text, setText] = useState('');
 
+  const sendText = () => {
+    const client = clientRef.current;
+
+    client?.sendUserMessageContent([{ type: 'input_text', text: text }]);
+  };
+
+  const [isRecording, setIsRecording] = useState(false);
+
+  const startRecording = async () => {
+    setIsRecording(true);
+    const client = clientRef.current;
+    const wavRecorder = wavRecorderRef.current;
+    const wavStreamPlayer = wavStreamPlayerRef.current;
+    const trackSampleOffset = await wavStreamPlayer.interrupt();
+    if (trackSampleOffset?.trackId) {
+      const { trackId, offset } = trackSampleOffset;
+      client?.cancelResponse(trackId, offset);
+    }
+    await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
+  };
+
+  const stopRecording = async () => {
+    setIsRecording(false);
+    const client = clientRef.current;
+    const wavRecorder = wavRecorderRef.current;
+    await wavRecorder.pause();
+    client?.createResponse();
+  };
+
+  const [isVadmode, setVadMode] = useState(true);
+
+  const [canPushToTalk, setCanPushToTalk] = useState(true);
+
+  const changeTurnEndType = async (value: boolean) => {
+    setVadMode(value);
+
+    const client = clientRef.current;
+    const wavRecorder = wavRecorderRef.current;
+    if (!value && wavRecorder.getStatus() === 'recording') {
+      await wavRecorder.pause();
+    }
+
+    client?.updateSession({
+      turn_detection: !value ? null : { type: 'server_vad' },
+    });
+
+    if (value && client?.isConnected()) {
+      await wavRecorder.record((data) => client.appendInputAudio(data.mono));
+    }
+
+    setCanPushToTalk(!value);
+  };
+
+  // function startCall() {
+  //   // setIsInChannel(true);
+  //   // play = true;
+  //   const audioCtx = new AudioContext();
+
+  //   // connectAudioWebSocket(audioCtx);
+
+  //   // 该变量存储当前MediaStreamAudioSourceNode的引用
+  //   // 可以通过它关闭麦克风停止音频传输
+
+  //   // 创建一个ScriptProcessorNode 用于接收当前麦克风的音频
+  //   scriptNode.current = audioCtx.createScriptProcessor(4096, 1, 1);
+
+  //   navigator.mediaDevices
+  //     .getUserMedia({ audio: true, video: false })
+  //     .then((stream) => {
+  //       mediaStack.current = stream;
+
+  //       source.current = audioCtx.createMediaStreamSource(stream);
+
+  //       scriptNode?.current && source.current?.connect(scriptNode.current);
+
+  //       scriptNode.current?.connect(audioCtx.destination);
+  //     })
+  //     .catch(function (err) {
+  //       /* 处理error */
+  //       console.log('err', err);
+  //       // setIsInChannel(false);
+  //     });
+
+  //   // 当麦克风有声音输入时，会调用此事件
+  //   // 实际上麦克风始终处于打开状态时，即使不说话，此事件也在一直调用
+  //   scriptNode.current.addEventListener('audioprocess', (audioProcessingEvent) => {
+  //     console.log('audioProcessingEvent', audioProcessingEvent);
+
+  //     const inputBuffer = audioProcessingEvent.inputBuffer;
+  //     // console.log("inputBuffer",inputBuffer);
+  //     // 由于只创建了一个音轨，这里只取第一个频道的数据
+  //     const inputData = inputBuffer.getChannelData(0);
+  //     // 通过socket传输数据，实际上传输的是Float32Array
+  //     // if (audioSocket.current?.readyState === 1) {
+  //     // console.log("发送的数据",inputData);
+  //     // audioSocket.value.send(inputData);Í
+  //     // const jsonData = JSON.stringify(inputData);
+
+  //     const intArray = new Int16Array(inputData.map((value) => Math.round(value)));
+  //     console.log('intArray', intArray);
+
+  //     // audioSocket.current?.sendUserMessageContent({ audio: intArray });
+
+  //     audioSocket.current?.appendInputAudio(intArray);
+
+  //     // audioSocket.current?.createResponse();
+  //   });
+  // }
+
+  // // // 关闭麦克风
+  // const stopCall = () => {
+  //   // setIsInChannel(false);
+  //   // play = false;
+  //   mediaStack.current?.getTracks()[0].stop();
+  //   scriptNode.current?.disconnect();
+
+  //   if (audioSocket.current) {
+  //     // audioSocket.current.cancelResponse();
+  //     audioSocket.current = null;
+  //   }
+  // };
+
+  const avatar = useRef<StreamingAvatar | null>(null);
+  const [stream, setStream] = useState<MediaStream>();
+
+  const [token, setToken] = useState<string>('');
+
+  const [isLoadingSession, setIsLoadingSession] = useState(false);
+  const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
+  const [isUserTalking, setIsUserTalking] = useState(false);
+  const [debug, setDebug] = useState<string>();
+
+  // const [text, setText] = useState<string>('');
+  const mediaStream = useRef<HTMLVideoElement>(null);
+  const [chatMode, setChatMode] = useState('text_mode');
+  const [data, setData] = useState<StartAvatarResponse>();
+
+  useEffect(() => {
+    initHeygen();
+
+    return () => {
+      endSession();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (stream && mediaStream.current) {
+      mediaStream.current.srcObject = stream;
+      mediaStream.current.onloadedmetadata = () => {
+        mediaStream.current!.play();
+        setDebug('Playing');
+      };
+    }
+  }, [mediaStream, stream]);
+
+  const initHeygen = async () => {
+    const { data } = await getHeygenToken();
+    console.log('data', data);
+
+    if (!data.error && data.token) {
+      setToken(data.token);
+    }
+  };
+
+  async function handleSpeak(t) {
+    setIsLoadingRepeat(true);
+    if (!avatar.current) {
+      setDebug('Avatar API not initialized');
+
+      return;
+    }
+    // speak({ text: text, task_type: TaskType.REPEAT })
+    await avatar.current.speak({ text: t, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
+      setDebug(e.message);
+    });
+    setIsLoadingRepeat(false);
+  }
+
+  async function handleInterrupt() {
+    if (!avatar.current) {
+      setDebug('Avatar API not initialized');
+
+      return;
+    }
+    await avatar.current.interrupt().catch((e) => {
+      setDebug(e.message);
+    });
+  }
+
+  async function endSession() {
+    await avatar.current?.stopAvatar();
+    setStream(undefined);
+  }
+
+  async function startSession() {
+    setIsLoadingSession(true);
+    // const newToken = await fetchAccessToken();
+
+    const newToken = token;
+    // console.log('newToken', newToken);
+    avatar.current = new StreamingAvatar({
+      token: newToken,
+    });
+    console.log('avatar', avatar.current);
+
+    avatar.current.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
+      console.log('Avatar started talking', e);
+    });
+
+    avatar.current.on(StreamingEvents.AVATAR_STOP_TALKING, (e) => {
+      console.log('Avatar stopped talking', e);
+    });
+
+    avatar.current.on(StreamingEvents.STREAM_DISCONNECTED, () => {
+      console.log('Stream disconnected');
+      endSession();
+    });
+
+    avatar.current?.on(StreamingEvents.STREAM_READY, (event) => {
+      console.log('>>>>> Stream ready:', event.detail);
+      setStream(event.detail);
+    });
+
+    avatar.current?.on(StreamingEvents.USER_START, (event) => {
+      console.log('>>>>> User started talking:', event);
+      setIsUserTalking(true);
+    });
+
+    avatar.current?.on(StreamingEvents.USER_STOP, (event) => {
+      console.log('>>>>> User stopped talking:', event);
+      setIsUserTalking(false);
+    });
+
+    try {
+      const res = await avatar.current.createStartAvatar({
+        quality: AvatarQuality.Low,
+        avatarName: 'Wayne_20240711',
+        // knowledgeId: '', // Or use a custom `knowledgeBase`.
+        voice: {
+          rate: 1.5, // 0.5 ~ 1.5
+          emotion: VoiceEmotion.EXCITED,
+        },
+        language: 'zh-CN',
+      });
+
+      console.log('res', res);
+
+      setData(res);
+      // default to voice mode
+      await avatar.current?.startVoiceChat();
+      // await avatar.current?.startListening();
+      setChatMode('voice_mode');
+    } catch (error) {
+      console.error('Error starting avatar session:', error);
+    } finally {
+      setIsLoadingSession(false);
+    }
+  }
+
+  async function startListening() {
+    await avatar.current?.startListening();
+  }
+
   return (
-    <div className='container'>
+    <div className='container flex'>
       <section className='control-container'>
         <Card title='control'>
           <Form ref={formRef} wrapperCol={{ span: 24 }} size='large'>
@@ -385,24 +463,147 @@ const OpenAI = () => {
               <TextArea></TextArea>
             </Form.Item>
           </Form>
-          <div className='m-b4'>Status: {isConnect ? 'Connect' : 'DisConnect'}</div>
-
-          <Button className='text-white' type='primary' onClick={initOpenAi}>
-            Connect
+          <div className='m-b4'>
+            Status: {isConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+          </div>
+          <div className='m-b4'>
+            Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={changeTurnEndType} />
+          </div>
+          <Button className='text-white' type='primary' onClick={isConnect ? disconnectConversation : initOpenAi}>
+            {isConnect ? 'DisConnect' : 'Connect'}
           </Button>
+          <Row className='mt-4'>
+            {isConnect && canPushToTalk && !isVadmode && (
+              <Button
+                // buttonStyle={isRecording ? 'alert' : 'regular'}
+                type='secondary'
+                disabled={!isConnect || !canPushToTalk}
+                onMouseDown={startRecording}
+                onMouseUp={stopRecording}
+              >
+                {isRecording ? 'release to send' : 'push to talk'}
+              </Button>
+            )}
+          </Row>
+
           <Card className='m-t4'>
             <Input value={text} onChange={(e) => setText(e)}></Input>
             <Button disabled={!isConnect} className='text-white mt-2' onClick={sendText}>
               Send
             </Button>
           </Card>
-          <Card className='m-t4'>
+          {/* <Card className='m-t4'>
             <Button disabled={!isConnect} className='text-white' onClick={startCall}>
               StartCall
             </Button>
-          </Card>
+          </Card> */}
         </Card>
       </section>
+      <section className='control-container'>
+        <Card title='events'>
+          <div className='content-block-body'>
+            {!realtimeEvents.length && `awaiting connection...`}
+            {realtimeEvents.map((realtimeEvent, i) => {
+              const count = realtimeEvent.count;
+              const event = { ...realtimeEvent.event };
+              if (event.type === 'input_audio_buffer.append') {
+                event.audio = `[trimmed: ${event.audio.length} bytes]`;
+              } else if (event.type === 'response.audio.delta') {
+                event.delta = `[trimmed: ${event.delta.length} bytes]`;
+              }
+              return (
+                <div className='event' key={event.event_id}>
+                  <div className='event-timestamp'>{realtimeEvent.time}</div>
+                  <div className='event-details'>
+                    <div
+                      className='event-summary'
+                      // onClick={() => {
+                      //   // toggle event details
+                      //   const id = event.event_id;
+                      //   const expanded = { ...expandedEvents };
+                      //   if (expanded[id]) {
+                      //     delete expanded[id];
+                      //   } else {
+                      //     expanded[id] = true;
+                      //   }
+                      //   setExpandedEvents(expanded);
+                      // }}
+                    >
+                      <div className={`event-source ${event.type === 'error' ? 'error' : realtimeEvent.source}`}>
+                        {realtimeEvent.source === 'client' ? 1 : 2}
+                        <span>{event.type === 'error' ? 'error!' : realtimeEvent.source}</span>
+                      </div>
+                      <div className='event-type'>
+                        {event.type}
+                        {count && ` (${count})`}
+                      </div>
+                    </div>
+                    {/* {!!expandedEvents[event.event_id] && (
+                  <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
+                )} */}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+        <Card title='conversationItem'>
+          <div className='content-block-body'>
+            {!items.length && `awaiting connection...`}
+            {items.map((conversationItem, i) => {
+              return (
+                <div className='conversation-item' key={conversationItem.id}>
+                  <div className={`speaker ${conversationItem.role || ''}`}>
+                    <div>{(conversationItem.role || conversationItem.type).replaceAll('_', ' ')}</div>
+                    {/* <div className='close' onClick={() => deleteConversationItem(conversationItem.id)}>
+                      <X />
+                    </div> */}
+                  </div>
+                  <div className={`speaker-content`}>
+                    {/* tool response */}
+                    {conversationItem.type === 'function_call_output' && <div>{conversationItem.formatted.output}</div>}
+                    {/* tool call */}
+                    {!!conversationItem.formatted.tool && (
+                      <div>
+                        {conversationItem.formatted.tool.name}({conversationItem.formatted.tool.arguments})
+                      </div>
+                    )}
+                    {!conversationItem.formatted.tool && conversationItem.role === 'user' && (
+                      <div>
+                        {conversationItem.formatted.transcript ||
+                          (conversationItem.formatted.audio?.length
+                            ? '(awaiting transcript)'
+                            : conversationItem.formatted.text || '(item sent)')}
+                      </div>
+                    )}
+                    {!conversationItem.formatted.tool && conversationItem.role === 'assistant' && (
+                      <div>
+                        {conversationItem.formatted.transcript || conversationItem.formatted.text || '(truncated)'}
+                      </div>
+                    )}
+                    {conversationItem.formatted.file && <audio src={conversationItem.formatted.file.url} controls />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      </section>
+      <video
+        ref={mediaStream}
+        autoPlay
+        playsInline
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      >
+        <track kind='captions' />
+      </video>
+      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
+        Start
+      </Button>
     </div>
   );
 };

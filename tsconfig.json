@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json.schemastore.org/tsconfig",
+  // "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -18,6 +18,8 @@
     "moduleDetection": "force",
     "noEmit": true,
     "jsx": "react-jsx",
+    "allowJs": true,
+    // "checkJs": false,
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
@@ -94,13 +96,19 @@
       ],
       "@views/*": [
         "src/views/*"
+      ],
+      "@heygen copy/*": [
+        "src/views/heygen copy/*"
+      ],
+      "@heygenConnOpenai/*": [
+        "src/views/heygenConnOpenai/*"
       ]
     }
   },
-  // "include": ["config", "types", "src"],
   "include": [
     "src",
-    "types"
+    "types",
+    "src/utils"
   ],
   "references": [
     {

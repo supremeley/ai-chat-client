@@ -20,7 +20,7 @@ import { getHeygenToken } from '@/api/heygen';
 // const FormItem = Form.Item;
 // const InputPassword = Input.Password;
 
-const Heygen = () => {
+const HeygenConnOpenai = () => {
   // const navigate = useNavigate();
   // const routerContext = useInRouterContext();
   // const authHook = useAuth();
@@ -43,7 +43,7 @@ const Heygen = () => {
   const [data, setData] = useState<StartAvatarResponse>();
 
   useEffect(() => {
-    fetchData();
+    initHeygen();
 
     return () => {
       endSession();
@@ -60,7 +60,7 @@ const Heygen = () => {
     }
   }, [mediaStream, stream]);
 
-  const fetchData = async () => {
+  const initHeygen = async () => {
     const { data } = await getHeygenToken();
     console.log('data', data);
 
@@ -80,7 +80,6 @@ const Heygen = () => {
     await avatar.current.speak({ text: text, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
       setDebug(e.message);
     });
-
     setIsLoadingRepeat(false);
   }
 
@@ -95,23 +94,6 @@ const Heygen = () => {
     });
   }
 
-  async function fetchAccessToken() {
-    try {
-      const response = await fetch('/api/get-access-token', {
-        method: 'POST',
-      });
-      const token = await response.text();
-
-      console.log('Access Token:', token); // Log the token to verify
-
-      return token;
-    } catch (error) {
-      console.error('Error fetching access token:', error);
-    }
-
-    return '';
-  }
-
   async function endSession() {
     await avatar.current?.stopAvatar();
     setStream(undefined);
@@ -122,7 +104,7 @@ const Heygen = () => {
     // const newToken = await fetchAccessToken();
 
     const newToken = token;
-    console.log('newToken', newToken);
+    // console.log('newToken', newToken);
     avatar.current = new StreamingAvatar({
       token: newToken,
     });
@@ -131,25 +113,31 @@ const Heygen = () => {
     avatar.current.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
       console.log('Avatar started talking', e);
     });
+
     avatar.current.on(StreamingEvents.AVATAR_STOP_TALKING, (e) => {
       console.log('Avatar stopped talking', e);
     });
+
     avatar.current.on(StreamingEvents.STREAM_DISCONNECTED, () => {
       console.log('Stream disconnected');
       endSession();
     });
+
     avatar.current?.on(StreamingEvents.STREAM_READY, (event) => {
       console.log('>>>>> Stream ready:', event.detail);
       setStream(event.detail);
     });
+
     avatar.current?.on(StreamingEvents.USER_START, (event) => {
       console.log('>>>>> User started talking:', event);
       setIsUserTalking(true);
     });
+
     avatar.current?.on(StreamingEvents.USER_STOP, (event) => {
       console.log('>>>>> User stopped talking:', event);
       setIsUserTalking(false);
     });
+
     try {
       const res = await avatar.current.createStartAvatar({
         quality: AvatarQuality.High,
@@ -197,11 +185,8 @@ const Heygen = () => {
       <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
         Start
       </Button>
-      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startListening}>
-        Listening
-      </Button>
     </div>
   );
 };
 
-export default Heygen;
+export default HeygenConnOpenai;

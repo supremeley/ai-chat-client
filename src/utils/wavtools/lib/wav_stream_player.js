@@ -1,5 +1,5 @@
-import { StreamProcessorSrc } from './worklets/stream_processor.js';
 import { AudioAnalysis } from './analysis/audio_analysis.js';
+import { StreamProcessorSrc } from './worklets/stream_processor.js';
 
 /**
  * Plays audio streams received in raw PCM16 chunks from the browser
@@ -50,22 +50,11 @@ export class WavStreamPlayer {
    * @param {number} [maxDecibels] default -30
    * @returns {import('./analysis/audio_analysis.js').AudioAnalysisOutputType}
    */
-  getFrequencies(
-    analysisType = 'frequency',
-    minDecibels = -100,
-    maxDecibels = -30
-  ) {
+  getFrequencies(analysisType = 'frequency', minDecibels = -100, maxDecibels = -30) {
     if (!this.analyser) {
       throw new Error('Not connected, please call .connect() first');
     }
-    return AudioAnalysis.getFrequencies(
-      this.analyser,
-      this.sampleRate,
-      null,
-      analysisType,
-      minDecibels,
-      maxDecibels
-    );
+    return AudioAnalysis.getFrequencies(this.analyser, this.sampleRate, null, analysisType, minDecibels, maxDecibels);
   }
 
   /**
