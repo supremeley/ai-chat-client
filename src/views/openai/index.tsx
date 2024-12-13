@@ -9,7 +9,7 @@ import { RealtimeClient } from '@openai/realtime-api-beta';
 import type { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
 
 import { getHeygenToken } from '@/api/heygen';
-import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
+import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools';
 
 const DefaultOpenAIKey =
   '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';
@@ -40,10 +40,20 @@ const OpenAI = () => {
 
   const formRef = useRef<FormInstance<LoginParams>>(null);
 
-  useEffect(() => {
-    console.log(items.at(-1));
-    items.at(-1)?.formatted?.text && handleSpeak(items.at(-1)?.formatted?.text);
-  }, [items]);
+  // useEffect(() => {
+  //   console.log('items', items);
+
+  //   const transcriptList = items.filter(
+  //     (item) => item.role === 'assistant' && item.status === 'completed' && item.formatted.transcript,
+  //   );
+  //   console.log('transcriptList', transcriptList);
+
+  //   const msg = transcriptList.at(-1)?.formatted?.transcript;
+
+  //   console.log('msg', msg);
+
+  //   // msg && handleSpeak(msg);
+  // }, [items]);
 
   useEffect(() => {
     return () => {
@@ -110,31 +120,40 @@ const OpenAI = () => {
       // do thing
     });
 
-    client.on('conversation.interrupted', async (event) => {
-      /* do something */
-      console.log('conversation.interrupted', event);
+    // client.on('conversation.interrupted', async (event) => {
+    //   /* do something */
 
-      const trackSampleOffset = await wavStreamPlayer.interrupt();
+    //   const trackSampleOffset = await wavStreamPlayer.interrupt();
 
-      if (trackSampleOffset?.trackId) {
-        const { trackId, offset } = trackSampleOffset;
-        client.cancelResponse(trackId, offset);
-      }
-    });
+    //   console.log('conversation.interrupted', trackSampleOffset);
+
+    //   if (trackSampleOffset?.trackId) {
+    //     const { trackId, offset } = trackSampleOffset;
+    //     client.cancelResponse(trackId, offset);
+    //   }
+    // });
 
     client.on('conversation.updated', async ({ item, delta }) => {
-      console.log('conversation.updated delta', delta);
-      console.log('conversation.updated item', item);
+      // if (delta?.audio) {
+      //   console.log('delta', delta);
+      //   // console.log('item.status', JSON.stringify(item.status));
+      //   wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+      // }
 
-      if (delta?.audio) {
-        console.log('1');
-        wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+      if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
+        console.log('delta', delta);
+        console.log('item', item);
+        setText(item.formatted.transcript);
+        // console.log('item.status', JSON.stringify(item.status));
+        // wavStreamPlayer.add16BitPCM(delta.audio, item.id);
       }
 
       if (item.status === 'completed' && item.formatted.audio?.length) {
-        console.log('2');
-        const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
-        item.formatted.file = wavFile;
+        // console.log('conversation.updated delta', delta);
+        // console.log('conversation.updated item', item);
+        //   console.log('2');
+        //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
+        //   item.formatted.file = wavFile;
       }
 
       const items = client.conversation.getItems();
@@ -188,6 +207,12 @@ const OpenAI = () => {
 
     client?.sendUserMessageContent([{ type: 'input_text', text: text }]);
   };
+
+  useEffect(() => {
+    console.log(text);
+
+    handleSpeak(text);
+  }, [text]);
 
   const [isRecording, setIsRecording] = useState(false);
 
