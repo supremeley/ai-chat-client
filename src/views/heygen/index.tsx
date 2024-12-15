@@ -3,10 +3,9 @@ import './index.scss';
 import { Button } from '@arco-design/web-react';
 import StreamingAvatar, {
   AvatarQuality,
-  type StartAvatarResponse,
   StreamingEvents,
-  TaskMode,
-  TaskType,
+  // TaskMode,
+  // TaskType,
   VoiceEmotion,
 } from '@heygen/streaming-avatar';
 
@@ -33,14 +32,14 @@ const Heygen = () => {
   const [token, setToken] = useState<string>('');
 
   const [isLoadingSession, setIsLoadingSession] = useState(false);
-  const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
+  // const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
   const [isUserTalking, setIsUserTalking] = useState(false);
   const [debug, setDebug] = useState<string>();
 
-  const [text, setText] = useState<string>('');
+  // const [text, setText] = useState<string>('');
   const mediaStream = useRef<HTMLVideoElement>(null);
   const [chatMode, setChatMode] = useState('text_mode');
-  const [data, setData] = useState<StartAvatarResponse>();
+  // const [data, setData] = useState<StartAvatarResponse>();
 
   useEffect(() => {
     fetchData();
@@ -69,48 +68,48 @@ const Heygen = () => {
     }
   };
 
-  async function handleSpeak() {
-    setIsLoadingRepeat(true);
-    if (!avatar.current) {
-      setDebug('Avatar API not initialized');
+  // async function handleSpeak() {
+  //   setIsLoadingRepeat(true);
+  //   if (!avatar.current) {
+  //     setDebug('Avatar API not initialized');
 
-      return;
-    }
-    // speak({ text: text, task_type: TaskType.REPEAT })
-    await avatar.current.speak({ text: text, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
-      setDebug(e.message);
-    });
+  //     return;
+  //   }
+  //   // speak({ text: text, task_type: TaskType.REPEAT })
+  //   await avatar.current.speak({ text: text, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
+  //     setDebug(e.message);
+  //   });
 
-    setIsLoadingRepeat(false);
-  }
+  //   setIsLoadingRepeat(false);
+  // }
 
-  async function handleInterrupt() {
-    if (!avatar.current) {
-      setDebug('Avatar API not initialized');
+  // async function handleInterrupt() {
+  //   if (!avatar.current) {
+  //     setDebug('Avatar API not initialized');
 
-      return;
-    }
-    await avatar.current.interrupt().catch((e) => {
-      setDebug(e.message);
-    });
-  }
+  //     return;
+  //   }
+  //   await avatar.current.interrupt().catch((e) => {
+  //     setDebug(e.message);
+  //   });
+  // }
 
-  async function fetchAccessToken() {
-    try {
-      const response = await fetch('/api/get-access-token', {
-        method: 'POST',
-      });
-      const token = await response.text();
+  // async function fetchAccessToken() {
+  //   try {
+  //     const response = await fetch('/api/get-access-token', {
+  //       method: 'POST',
+  //     });
+  //     const token = await response.text();
 
-      console.log('Access Token:', token); // Log the token to verify
+  //     console.log('Access Token:', token); // Log the token to verify
 
-      return token;
-    } catch (error) {
-      console.error('Error fetching access token:', error);
-    }
+  //     return token;
+  //   } catch (error) {
+  //     console.error('Error fetching access token:', error);
+  //   }
 
-    return '';
-  }
+  //   return '';
+  // }
 
   async function endSession() {
     await avatar.current?.stopAvatar();
@@ -164,7 +163,7 @@ const Heygen = () => {
 
       console.log('res', res);
 
-      setData(res);
+      // setData(res);
       // default to voice mode
       await avatar.current?.startVoiceChat();
       // await avatar.current?.startListening();
@@ -182,6 +181,10 @@ const Heygen = () => {
 
   return (
     <div className='login'>
+      {isLoadingSession}
+      {isUserTalking}
+      {debug}
+      {chatMode}
       <video
         ref={mediaStream}
         autoPlay

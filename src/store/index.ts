@@ -5,7 +5,6 @@ import storage from 'redux-persist/lib/storage';
 import { encryptTransform } from 'redux-persist-transform-encrypt';
 
 import authReducer from './auth';
-import examReducer from './exam';
 import sysReducer from './sys';
 
 const encryptor = encryptTransform({
@@ -25,7 +24,7 @@ const authPersistedReducer = persistReducer(authPersistConfig, authReducer);
 const reducers = combineReducers({
   sys: sysReducer,
   auth: authPersistedReducer,
-  exam: examReducer,
+  // exam: examReducer,
 });
 
 export const store = configureStore({

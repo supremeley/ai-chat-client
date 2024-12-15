@@ -4,12 +4,11 @@ import { Button, Card, Form, type FormInstance, Input, Switch, Tag } from '@arco
 import Row from '@arco-design/web-react/es/Grid/row';
 import TextArea from '@arco-design/web-react/es/Input/textarea';
 import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
-import { type StartAvatarResponse, StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
-import { RealtimeClient } from '@openai/realtime-api-beta';
-import type { ItemType } from '@openai/realtime-api-beta/dist/lib/client';
+import { StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
+import { RealtimeClient, type FormattedItem } from 'openai-realtime-api';
 
 import { getHeygenToken } from '@/api/heygen';
-import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools';
+import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 
 const DefaultOpenAIKey =
   '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';
@@ -35,7 +34,7 @@ const OpenAI = () => {
 
   const wavStreamPlayerRef = useRef<WavStreamPlayer>(new WavStreamPlayer({ sampleRate: 24000 }));
 
-  const [items, setItems] = useState<ItemType[]>([]);
+  const [items, setItems] = useState<FormattedItem[]>([]);
 
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
 
@@ -81,12 +80,14 @@ const OpenAI = () => {
       }
 
       // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
-    } catch (e) {}
+    } catch (e) {
+      console.log(e);
+    }
   };
 
   const connectConversation = useCallback(async (conf: LoginParams) => {
     const wavRecorder = wavRecorderRef.current;
-    const wavStreamPlayer = wavStreamPlayerRef.current;
+    // const wavStreamPlayer = wavStreamPlayerRef.current;
 
     const client = new RealtimeClient({
       dangerouslyAllowAPIKeyInBrowser: true,
@@ -103,7 +104,7 @@ const OpenAI = () => {
       });
     }
 
-    client.on('realtime.event', (realtimeEvent: RealtimeEvent) => {
+    client.on('realtime.event', (realtimeEvent) => {
       setRealtimeEvents((realtimeEvents) => {
         const lastEvent = realtimeEvents[realtimeEvents.length - 1];
         if (lastEvent?.event.type === realtimeEvent.event.type) {
@@ -134,7 +135,7 @@ const OpenAI = () => {
     //   }
     // });
 
-    client.on('conversation.updated', async ({ item, delta }) => {
+    client.on('conversation.updated', ({ item, delta }) => {
       // if (delta?.audio) {
       //   console.log('delta', delta);
       //   // console.log('item.status', JSON.stringify(item.status));
@@ -255,7 +256,7 @@ const OpenAI = () => {
       turn_detection: !value ? null : { type: 'server_vad' },
     });
 
-    if (value && client?.isConnected()) {
+    if (value && client?.isConnected) {
       await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
 
@@ -372,7 +373,7 @@ const OpenAI = () => {
     }
   };
 
-  async function handleSpeak(t) {
+  async function handleSpeak(t: string) {
     setIsLoadingRepeat(true);
     if (!avatar.current) {
       setDebug('Avatar API not initialized');
@@ -386,17 +387,17 @@ const OpenAI = () => {
     setIsLoadingRepeat(false);
   }
 
-  async function handleInterrupt() {
-    if (!avatar.current) {
-      setDebug('Avatar API not initialized');
+  // async function handleInterrupt() {
+  //   if (!avatar.current) {
+  //     setDebug('Avatar API not initialized');
 
-      return;
-    }
+  //     return;
+  //   }
 
-    await avatar.current.interrupt().catch((e) => {
-      setDebug(e.message);
-    });
-  }
+  //   await avatar.current.interrupt().catch((e) => {
+  //     setDebug(e.message);
+  //   });
+  // }
 
   async function endSession() {
     await avatar.current?.stopAvatar();
@@ -469,9 +470,9 @@ const OpenAI = () => {
     }
   }
 
-  async function startListening() {
-    await avatar.current?.startListening();
-  }
+  // async function startListening() {
+  //   await avatar.current?.startListening();
+  // }
 
   return (
     <div className='container flex'>
@@ -530,7 +531,7 @@ const OpenAI = () => {
         <Card title='events'>
           <div className='content-block-body'>
             {!realtimeEvents.length && `awaiting connection...`}
-            {realtimeEvents.map((realtimeEvent, i) => {
+            {realtimeEvents.map((realtimeEvent) => {
               const count = realtimeEvent.count;
               const event = { ...realtimeEvent.event };
               if (event.type === 'input_audio_buffer.append') {
@@ -577,11 +578,11 @@ const OpenAI = () => {
         <Card title='conversationItem'>
           <div className='content-block-body'>
             {!items.length && `awaiting connection...`}
-            {items.map((conversationItem, i) => {
+            {items.map((conversationItem) => {
               return (
                 <div className='conversation-item' key={conversationItem.id}>
                   <div className={`speaker ${conversationItem.role || ''}`}>
-                    <div>{(conversationItem.role || conversationItem.type).replaceAll('_', ' ')}</div>
+                    <div>{conversationItem.role.replaceAll('_', ' ')}</div>
                     {/* <div className='close' onClick={() => deleteConversationItem(conversationItem.id)}>
                       <X />
                     </div> */}
@@ -631,6 +632,10 @@ const OpenAI = () => {
       <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
         Start
       </Button>
+      {isLoadingSession}
+      {isUserTalking}
+      {debug}
+      {isLoadingRepeat}
     </div>
   );
 };

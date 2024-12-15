@@ -9,5 +9,5 @@
     "allowJs": true,
     "typeRoots": ["./node_modules/@types", "./types"]
   },
-  "include": ["config", "types", "*.config.ts", "src/utils"]
+  "include": ["config", "types", "*.config.ts"]
 }

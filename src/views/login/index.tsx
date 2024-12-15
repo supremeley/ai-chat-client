@@ -1,7 +1,7 @@
 import './index.scss';
 
 import type { FormInstance } from '@arco-design/web-react';
-import { Button, Form, Grid, Input, Message, Notification } from '@arco-design/web-react';
+import { Button, Form, Grid, Input, Message } from '@arco-design/web-react';
 
 import { getCaptcha } from '@/api/auth';
 import type { LoginParams } from '@/api/auth/interface';
@@ -80,9 +80,9 @@ const Login = () => {
       setLoading(true);
 
       try {
-        const res = await formRef.current.validate();
+        // const res = await formRef.current.validate();
 
-        const userinfo = await authHook.login(res);
+        // const userinfo = await authHook.login(res);
 
         await authHook.loadPermission();
 
@@ -90,14 +90,14 @@ const Login = () => {
           content: '登录成功',
           duration: 1000,
           onClose: () => {
-            const hour = new Date().getHours();
-            const thisTime =
-              hour < 8 ? '早上好' : hour <= 11 ? '上午好' : hour <= 13 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
+            // const hour = new Date().getHours();
+            // const thisTime =
+            //   hour < 8 ? '早上好' : hour <= 11 ? '上午好' : hour <= 13 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
 
-            Notification.success({
-              title: `${userinfo?.username ?? '您好'},欢迎登录`,
-              content: thisTime,
-            });
+            // Notification.success({
+            //   title: `${userinfo? userinfo ?? '您好'},欢迎登录`,
+            //   content: thisTime,
+            // });
 
             // const hash = window.location.hash.split('/');
 

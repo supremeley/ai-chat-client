@@ -4,7 +4,6 @@ import { useDispatch } from 'react-redux';
 
 import { auth as authApi } from '@/api';
 import type { LoginParams } from '@/api/auth/interface';
-import type { User } from '@/api/user/interface';
 import { ResultEnum } from '@/enums';
 import { useAppSelector } from '@/hooks';
 import { store } from '@/store';
@@ -13,7 +12,7 @@ import { setMenu, setRoutes, setRouteTagList } from '@/store/sys';
 import { transfrom2Menu, transfrom2Route } from '@/utils';
 
 export const useAuth = (): {
-  login: (params: LoginParams) => Promise<User | void>;
+  login: (params: LoginParams) => Promise<void>;
   logout: () => void;
   loadPermission: () => Promise<RouteWithMetaObject[]>;
 } => {
@@ -23,7 +22,7 @@ export const useAuth = (): {
   // const [loading, setLoading] = useState(false);
   const sys = useAppSelector((state) => state.sys);
 
-  const login = async (params: LoginParams): Promise<User | void> => {
+  const login = async (params: LoginParams): Promise<void> => {
     // setLoading(true);
 
     try {
