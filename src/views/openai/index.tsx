@@ -36,6 +36,7 @@ const OpenAI = () => {
   const wavStreamPlayerRef = useRef<WavStreamPlayer>(new WavStreamPlayer({ sampleRate: 24000 }));
 
   const [items, setItems] = useState<ItemType[]>([]);
+
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
 
   const formRef = useRef<FormInstance<LoginParams>>(null);
@@ -143,18 +144,18 @@ const OpenAI = () => {
       if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
         console.log('delta', delta);
         console.log('item', item);
+
         setText(item.formatted.transcript);
         // console.log('item.status', JSON.stringify(item.status));
-        // wavStreamPlayer.add16BitPCM(delta.audio, item.id);
       }
 
-      if (item.status === 'completed' && item.formatted.audio?.length) {
-        // console.log('conversation.updated delta', delta);
-        // console.log('conversation.updated item', item);
-        //   console.log('2');
-        //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
-        //   item.formatted.file = wavFile;
-      }
+      // if (item.status === 'completed' && item.formatted.audio?.length) {
+      // console.log('conversation.updated delta', delta);
+      // console.log('conversation.updated item', item);
+      //   console.log('2');
+      //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
+      //   item.formatted.file = wavFile;
+      // }
 
       const items = client.conversation.getItems();
 
@@ -332,6 +333,7 @@ const OpenAI = () => {
 
   const avatar = useRef<StreamingAvatar | null>(null);
   const [stream, setStream] = useState<MediaStream>();
+  const mediaStream = useRef<HTMLVideoElement>(null);
 
   const [token, setToken] = useState<string>('');
 
@@ -340,10 +342,8 @@ const OpenAI = () => {
   const [isUserTalking, setIsUserTalking] = useState(false);
   const [debug, setDebug] = useState<string>();
 
-  // const [text, setText] = useState<string>('');
-  const mediaStream = useRef<HTMLVideoElement>(null);
-  const [chatMode, setChatMode] = useState('text_mode');
-  const [data, setData] = useState<StartAvatarResponse>();
+  // const [chatMode, setChatMode] = useState('text_mode');
+  // const [data, setData] = useState<StartAvatarResponse>();
 
   useEffect(() => {
     initHeygen();
@@ -392,6 +392,7 @@ const OpenAI = () => {
 
       return;
     }
+
     await avatar.current.interrupt().catch((e) => {
       setDebug(e.message);
     });
@@ -411,7 +412,7 @@ const OpenAI = () => {
     avatar.current = new StreamingAvatar({
       token: newToken,
     });
-    console.log('avatar', avatar.current);
+    // console.log('avatar', avatar.current);
 
     avatar.current.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
       console.log('Avatar started talking', e);
@@ -444,7 +445,8 @@ const OpenAI = () => {
     try {
       const res = await avatar.current.createStartAvatar({
         quality: AvatarQuality.Low,
-        avatarName: 'Wayne_20240711',
+        avatarName: 'June_HR_public',
+        // avatarName: 'Wayne_20240711',
         // knowledgeId: '', // Or use a custom `knowledgeBase`.
         voice: {
           rate: 1.5, // 0.5 ~ 1.5
@@ -455,11 +457,11 @@ const OpenAI = () => {
 
       console.log('res', res);
 
-      setData(res);
+      // setData(res);
       // default to voice mode
       await avatar.current?.startVoiceChat();
       // await avatar.current?.startListening();
-      setChatMode('voice_mode');
+      // setChatMode('voice_mode');
     } catch (error) {
       console.error('Error starting avatar session:', error);
     } finally {
@@ -632,164 +634,5 @@ const OpenAI = () => {
     </div>
   );
 };
-
-// const OpenAI = () => {
-//   const navigate = useNavigate();
-//   // const routerContext = useInRouterContext();
-//   // const authHook = useAuth();
-//   const [loading, setLoading] = useState(false);
-//   const formRef = useRef<FormInstance<LoginParams>>(null);
-
-//   useEffect(() => {
-//     console.log('init Login');
-//   }, []);
-
-//   const handleLogin = async () => {
-//     if (loading) {
-//       return;
-//     }
-
-//     if (formRef.current) {
-//       setLoading(true);
-
-//       try {
-//         const res = await formRef.current.validate();
-
-//         const userinfo = await authHook.login(res);
-
-//         await authHook.loadPermission();
-
-//         Message.success({
-//           content: '登录成功',
-//           duration: 1000,
-//           onClose: () => {
-//             const hour = new Date().getHours();
-//             const thisTime =
-//               hour < 8 ? '早上好' : hour <= 11 ? '上午好' : hour <= 13 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
-
-//             Notification.success({
-//               title: `${userinfo?.username ?? '您好'},欢迎登录`,
-//               content: thisTime,
-//             });
-
-//             // const hash = window.location.hash.split('/');
-
-//             // let url = '';
-
-//             // if (hash.length > 1) {
-//             //   url = decodeURIComponent(hash.at(-1)!);
-//             // }
-
-//             // if (url === 'login' || url === '#login') {
-//             const url = '/knowledge/list';
-//             // }
-
-//             // TODO: useNavigate 使用到 RouterContext检查， 在Router后代中可使用正常
-//             // console.log('url', url);
-//             // console.log('routerContext', routerContext);
-//             // if (routerContext) {
-//             // navigate(url, { replace: true });
-//             // } else {
-//             window.location.hash = url;
-//             // }
-//           },
-//         });
-//       } catch (_) {
-//         console.log(formRef.current.getFieldsError());
-//         setLoading(false);
-//         // Message.error('校验失败，请检查字段！');
-//       }
-//     }
-//   };
-
-//   const jumpToViewList = () => {
-//     navigate(`/knowledge/view/ids=82,24,22,21`);
-//   };
-
-//   return (
-//     <div className='login'>
-//       <div className='login-header'>
-//         <img src={Logo} className='login-header__logo' />
-//         科普也是药
-//       </div>
-
-//       <div className='pl-4 pr-4'>
-//         <section className='login-container'>
-//           {/* <Row justify='end'>
-//             <Col xs={24} sm={24} md={18} lg={10} xl={10}> */}
-//           <div className='form'>
-//             <div className='form-title'>医生登录</div>
-//             <Form ref={formRef} wrapperCol={{ span: 24 }} size='large'>
-//               <FormItem field='account' rules={[{ required: true, message: '请输入账号' }]}>
-//                 <Input
-//                   addBefore={<div className='i-bxs:user'></div>}
-//                   autoComplete='account'
-//                   placeholder='请输入账号'
-//                   className='form-input'
-//                 />
-//               </FormItem>
-//               <FormItem field='password' rules={[{ required: true, message: '请输入密码' }]}>
-//                 <InputPassword
-//                   addBefore={<div className='i-material-symbols:password'></div>}
-//                   autoComplete='password'
-//                   placeholder='请输入密码'
-//                   className='form-input'
-//                 />
-//               </FormItem>
-//               <FormItem field='code' rules={[{ required: true, message: '请输入验证码' }]}>
-//                 <Input
-//                   addBefore={<div className='i-uiw:verification'></div>}
-//                   placeholder='请输入验证码'
-//                   className='form-input'
-//                   addAfter={<Captcha />}
-//                 />
-//               </FormItem>
-//               <FormItem>
-//                 <Button type='primary' shape='square' loading={loading} className='form-button' onClick={handleLogin}>
-//                   登录
-//                 </Button>
-//               </FormItem>
-//             </Form>
-//           </div>
-//           {/* </Col>
-//           </Row> */}
-//         </section>
-
-//         <div className='my-6'>
-//           <Row>
-//             <Col span={12} className='text-[20px] font-bold'>
-//               专病科普
-//             </Col>
-//             <Col span={12} className='text-center'>
-//               <Input.Search
-//                 searchButton='搜索'
-//                 placeholder='Search content'
-//                 style={{ width: 500, height: 40 }}
-//                 size='large'
-//               />
-//             </Col>
-//           </Row>
-
-//           <div className='mt-[20px]'>
-//             {[1, 2, 3].map((c) => (
-//               <Row key={c} gutter={4} className='mt-[4px]'>
-//                 <Col span={4} className='text-center'>
-//                   <div className='flex-1 py-[10px] group-container'>学科{c} &gt;</div>
-//                 </Col>
-//                 {[1, 2, 3, 4, 5].map((s) => (
-//                   <Col key={s} span={4} className='text-center'>
-//                     <div className='flex-1 py-[10px] bg-[#f2f3f5] item-container' onClick={jumpToViewList}>
-//                       疾病{s}
-//                     </div>
-//                   </Col>
-//                 ))}
-//               </Row>
-//             ))}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
 
 export default OpenAI;

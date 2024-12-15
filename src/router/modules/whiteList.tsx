@@ -9,7 +9,7 @@ export const WhiteList: RouteWithMetaObject[] = [
   {
     id: 'Home',
     path: '/',
-    element: <Navigate to='heygen' />,
+    element: <Navigate to='openai' />,
     title: '首页',
     hidden: true,
   },
