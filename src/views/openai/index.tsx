@@ -12,6 +12,7 @@ import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 import OpenAI from 'openai';
 import { RealtimePromptWorklet } from './realtime-prompt';
 import { AnalysisPromptWorklet } from './analysis—prompt';
+import type { ChatCompletionContentPartImage } from 'openai/resources/index.mjs';
 
 const DefaultOpenAIKey =
   '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';
@@ -507,7 +508,7 @@ const OpenAIConnHeygen = () => {
 
       await initOpenAi();
 
-      updateRealtimeSession(response);
+      response && updateRealtimeSession(response);
 
       loopSessionTimer();
     }, 1000);
@@ -522,7 +523,7 @@ const OpenAIConnHeygen = () => {
       if (imgArr.current.length === 3) {
         const response = await analysisImg(imgArr.current);
 
-        updateRealtimeSession(response);
+        response && updateRealtimeSession(response);
 
         imgArr.current = [];
       } else {
@@ -533,11 +534,11 @@ const OpenAIConnHeygen = () => {
     }, 3000);
   };
 
-  const stopVideo = () => {
-    const stream = videoStream.current!.srcObject as MediaStream;
-    const tracks = stream.getTracks();
-    tracks.forEach((track) => track.stop());
-  };
+  // const stopVideo = () => {
+  //   const stream = videoStream.current!.srcObject as MediaStream;
+  //   const tracks = stream.getTracks();
+  //   tracks.forEach((track) => track.stop());
+  // };
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -578,7 +579,7 @@ const OpenAIConnHeygen = () => {
       dangerouslyAllowBrowser: true,
     });
 
-    const imgList = imgs.map((img) => {
+    const imgList: ChatCompletionContentPartImage[] = imgs.map((img) => {
       return {
         type: 'image_url',
         image_url: {
@@ -608,7 +609,11 @@ const OpenAIConnHeygen = () => {
 
     console.log('response', response);
 
-    return JSON.parse(response.choices[0].message.content);
+    if (response.choices[0].message.content) {
+      return JSON.stringify(response.choices[0].message.content);
+    }
+
+    return response.choices[0].message.content;
   };
 
   return (
