@@ -8,3 +8,13 @@
   max-height: 40vh;
   overflow-y: auto;
 }
+
+#canvas {
+  position: absolute;
+  top: 10000px;
+  left: 10000px;
+  width: 1000px;
+  height: 720px;
+  overflow: hidden;
+  opacity: 0;
+}

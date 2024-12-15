@@ -96,12 +96,6 @@
       ],
       "@views/*": [
         "src/views/*"
-      ],
-      "@heygen copy/*": [
-        "src/views/heygen copy/*"
-      ],
-      "@heygenConnOpenai/*": [
-        "src/views/heygenConnOpenai/*"
       ]
     }
   },

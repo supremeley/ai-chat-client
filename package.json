@@ -28,6 +28,7 @@
     "localforage": "^1.10.0",
     "lodash-es": "^4.17.21",
     "mic": "^2.1.2",
+    "openai": "^4.76.3",
     "openai-realtime-api": "^1.0.7",
     "qrcode.react": "^4.1.0",
     "qs": "^6.13.0",

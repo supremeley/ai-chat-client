@@ -9,6 +9,9 @@ import { RealtimeClient, type FormattedItem } from 'openai-realtime-api';
 
 import { getHeygenToken } from '@/api/heygen';
 import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
+import OpenAI from 'openai';
+import { RealtimePromptWorklet } from './realtime-prompt';
+import { AnalysisPromptWorklet } from './analysis—prompt';
 
 const DefaultOpenAIKey =
   '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';
@@ -27,7 +30,7 @@ interface RealtimeEvent {
   event: Record<string, any>;
 }
 
-const OpenAI = () => {
+const OpenAIConnHeygen = () => {
   const clientRef = useRef<RealtimeClient | null>(null);
 
   const wavRecorderRef = useRef<WavRecorder>(new WavRecorder({ sampleRate: 24000 }));
@@ -76,7 +79,7 @@ const OpenAI = () => {
       await wavStreamPlayer.connect();
 
       if (res) {
-        connectConversation(res);
+        await connectConversation(res);
       }
 
       // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
@@ -94,7 +97,7 @@ const OpenAI = () => {
       apiKey: conf.apiKey,
     });
 
-    client.updateSession({ instructions: conf.instructions });
+    // client.updateSession({ instructions: conf.instructions });
     client.updateSession({ voice: 'alloy' });
     client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
 
@@ -201,6 +204,17 @@ const OpenAI = () => {
     const wavStreamPlayer = wavStreamPlayerRef.current;
     await wavStreamPlayer.interrupt();
   }, []);
+
+  const updateRealtimeSession = (instructions: string) => {
+    const client = clientRef.current;
+
+    const prompt = RealtimePromptWorklet.replace('##SCENE_DESCRIPTION##', JSON.stringify(instructions));
+
+    console.log('updateRealtimeSession instructions', instructions);
+    console.log('prompt', prompt);
+
+    client?.updateSession({ instructions: prompt });
+  };
 
   const [text, setText] = useState('');
 
@@ -359,7 +373,7 @@ const OpenAI = () => {
       mediaStream.current.srcObject = stream;
       mediaStream.current.onloadedmetadata = () => {
         mediaStream.current!.play();
-        setDebug('Playing');
+        // setDebug('Playing');
       };
     }
   }, [mediaStream, stream]);
@@ -375,8 +389,9 @@ const OpenAI = () => {
 
   async function handleSpeak(t: string) {
     setIsLoadingRepeat(true);
+
     if (!avatar.current) {
-      setDebug('Avatar API not initialized');
+      // setDebug('Avatar API not initialized');
 
       return;
     }
@@ -384,6 +399,7 @@ const OpenAI = () => {
     await avatar.current.speak({ text: t, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
       setDebug(e.message);
     });
+
     setIsLoadingRepeat(false);
   }
 
@@ -473,6 +489,127 @@ const OpenAI = () => {
   // async function startListening() {
   //   await avatar.current?.startListening();
   // }
+
+  const videoStream = useRef<HTMLVideoElement>(null);
+
+  async function startVideo() {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 300, height: 240 },
+      // audio: true,
+    });
+
+    videoStream.current!.srcObject = stream;
+
+    setTimeout(async () => {
+      const img = analyzeImgPath();
+
+      const response = await analysisImg([img]);
+
+      await initOpenAi();
+
+      updateRealtimeSession(response);
+
+      loopSessionTimer();
+    }, 1000);
+  }
+
+  const timer = useRef<NodeJS.Timer>();
+
+  const imgArr = useRef<string[]>([]);
+
+  const loopSessionTimer = () => {
+    timer.current = setInterval(async () => {
+      if (imgArr.current.length === 3) {
+        const response = await analysisImg(imgArr.current);
+
+        updateRealtimeSession(response);
+
+        imgArr.current = [];
+      } else {
+        const img = analyzeImgPath();
+
+        imgArr.current.push(img);
+      }
+    }, 3000);
+  };
+
+  const stopVideo = () => {
+    const stream = videoStream.current!.srcObject as MediaStream;
+    const tracks = stream.getTracks();
+    tracks.forEach((track) => track.stop());
+  };
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const analyzeImgPath = () => {
+    const canvas = canvasRef.current!;
+
+    canvas.width = videoStream.current?.videoWidth!;
+    canvas.height = videoStream.current?.videoHeight!;
+    // console.log(videoRef.videoWidth)
+    // console.log(videoRef.videoHeight)
+    const canvasCtx = canvas.getContext('2d');
+
+    canvasCtx?.drawImage(videoStream.current!, 0, 0); // canvas 拍照
+
+    const image = new Image(); //必须使用 Image ，不然 canvas 的 toDataURL 方法会报错，可不是闲着蛋疼
+
+    image.src = canvas.toDataURL('image/png');
+
+    // console.log('image', image);
+
+    return image.src;
+
+    // const params = { file: image.src, directory: 'order/' + props.orderSn };
+    // const params = { file: '123' }
+  };
+
+  const uploadImg = async () => {
+    const img = analyzeImgPath();
+
+    const response = await analysisImg([img]);
+
+    console.log('response', response);
+  };
+
+  const analysisImg = async (imgs: string[]) => {
+    const client = new OpenAI({
+      apiKey: DefaultOpenAIKey,
+      dangerouslyAllowBrowser: true,
+    });
+
+    const imgList = imgs.map((img) => {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: img,
+        },
+      };
+    });
+
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: AnalysisPromptWorklet,
+            },
+            ...imgList,
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+      // temperature: 0.9,
+      // top_p: 1,
+    });
+
+    console.log('response', response);
+
+    return JSON.parse(response.choices[0].message.content);
+  };
 
   return (
     <div className='container flex'>
@@ -632,12 +769,33 @@ const OpenAI = () => {
       <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
         Start
       </Button>
-      {isLoadingSession}
-      {isUserTalking}
-      {debug}
-      {isLoadingRepeat}
+      <div>
+        {isLoadingSession}
+        {isUserTalking}
+        {debug}
+        {isLoadingRepeat}
+      </div>
+      <video
+        ref={videoStream}
+        autoPlay
+        playsInline
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+        }}
+      >
+        <track kind='captions' />
+      </video>
+      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startVideo}>
+        Start Self
+      </Button>
+      <canvas id='canvas' ref={canvasRef}></canvas>
+      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={uploadImg}>
+        Upload File
+      </Button>
     </div>
   );
 };
 
-export default OpenAI;
+export default OpenAIConnHeygen;
