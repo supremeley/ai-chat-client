@@ -24,7 +24,7 @@ export const getHeygenToken = () => {
   return useHeygenAxios.post<HeygenSuccessResponse<HeygenTokenResult>>(
     {
       url: Api.heygenToken,
-      headers: { 'x-api-key': 'MzBjM2I0MThkMTBkNGIyMmE4ZDQ0YjE0YzZkYzU4ZjktMTczMzg4ODcyOQ==' },
+      headers: { 'x-api-key': 'NzA4NTFhMmEzODU4NDYzN2E4NWNhYTdmYmNlYjY2MTktMTczMzg5MDU3MA==' },
     },
     { needToken: false },
   );
