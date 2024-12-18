@@ -60,7 +60,9 @@ const Heygen = () => {
   }, [mediaStream, stream]);
 
   const fetchData = async () => {
-    const { data } = await getHeygenToken();
+    const res = 'NzA4NTFhMmEzODU4NDYzN2E4NWNhYTdmYmNlYjY2MTktMTczMzg5MDU3MA==';
+
+    const { data } = await getHeygenToken(res);
     console.log('data', data);
 
     if (!data.error && data.token) {

@@ -17,14 +17,14 @@ export const createHeygenAxios = (opt?: CreateAxiosOptions) => {
 export const useHeygenAxios = createHeygenAxios();
 
 enum Api {
-  heygenToken = 'https://api.heygen.com/v1/streaming.create_token',
+  GetHeygenSessionToken = 'https://api.heygen.com/v1/streaming.create_token',
 }
 
-export const getHeygenToken = () => {
+export const getHeygenToken = (key: string) => {
   return useHeygenAxios.post<HeygenSuccessResponse<HeygenTokenResult>>(
     {
-      url: Api.heygenToken,
-      headers: { 'x-api-key': 'NzA4NTFhMmEzODU4NDYzN2E4NWNhYTdmYmNlYjY2MTktMTczMzg5MDU3MA==' },
+      url: Api.GetHeygenSessionToken,
+      headers: { 'x-api-key': key },
     },
     { needToken: false },
   );

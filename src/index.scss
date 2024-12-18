@@ -9,8 +9,7 @@
 
   color-scheme: light;
   font-synthesis: none;
-
-  // background-color: #242424;
+  background-color: #242424;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizelegibility;
@@ -36,7 +35,7 @@
 }
 
 .arco-btn {
-  border-radius: 6px !important;
+  // border-radius: 6px !important;
 
   &-text {
     display: flex;

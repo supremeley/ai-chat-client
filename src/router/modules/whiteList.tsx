@@ -8,7 +8,7 @@ export const WhiteList: RouteWithMetaObject[] = [
   {
     id: 'Home',
     path: '/',
-    element: <Navigate to='openai' />,
+    element: <Navigate to='realtime' />,
     title: '首页',
     hidden: true,
   },
@@ -26,7 +26,7 @@ export const WhiteList: RouteWithMetaObject[] = [
   },
   {
     id: 'Openai',
-    path: '/openai',
+    path: '/realtime',
     element: <Openai />,
     title: 'Heygen',
   },

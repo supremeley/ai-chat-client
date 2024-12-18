@@ -1,27 +1,59 @@
 import './index.scss';
 
-import { Button, Card, Form, type FormInstance, Input, Switch, Tag } from '@arco-design/web-react';
-import Row from '@arco-design/web-react/es/Grid/row';
+import {
+  Button,
+  Card,
+  Form,
+  type FormInstance,
+  Switch,
+  Tag,
+  Spin,
+  Space,
+  Layout,
+  Input,
+  InputNumber,
+  Select,
+} from '@arco-design/web-react';
 import TextArea from '@arco-design/web-react/es/Input/textarea';
 import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
 import { StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
 import { RealtimeClient, type FormattedItem } from 'openai-realtime-api';
 
-import { getHeygenToken } from '@/api/heygen';
+import { heygen } from '@/api';
 import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 import OpenAI from 'openai';
 import { RealtimePromptWorklet } from './realtime-prompt';
 import { AnalysisPromptWorklet } from './analysis—prompt';
 import type { ChatCompletionContentPartImage } from 'openai/resources/index.mjs';
+import dayjs from 'dayjs';
 
 const DefaultOpenAIKey =
   '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';
 
-const DefaultInstructions = 'You are a great, upbeat friend.';
+const DefaultHeygenKey = 'NzA4NTFhMmEzODU4NDYzN2E4NWNhYTdmYmNlYjY2MTktMTczMzg5MDU3MA==';
 
-export interface LoginParams {
-  apiKey: string;
-  instructions: string;
+const QualityOptions = [AvatarQuality.High, AvatarQuality.Medium, AvatarQuality.Low];
+const VoiceEmotionOptions = [
+  VoiceEmotion.BROADCASTER,
+  VoiceEmotion.EXCITED,
+  VoiceEmotion.FRIENDLY,
+  VoiceEmotion.SERIOUS,
+  VoiceEmotion.SOOTHING,
+];
+
+export interface Config {
+  openai_key: string;
+  heygen_key: string;
+}
+
+export interface HeygenConfig {
+  quality: AvatarQuality;
+  avatarName: string;
+  voice: {
+    rate: number;
+    emotion: VoiceEmotion;
+  };
+  language: string;
 }
 
 interface RealtimeEvent {
@@ -32,44 +64,34 @@ interface RealtimeEvent {
 }
 
 const OpenAIConnHeygen = () => {
-  const clientRef = useRef<RealtimeClient | null>(null);
-
   const wavRecorderRef = useRef<WavRecorder>(new WavRecorder({ sampleRate: 24000 }));
-
   const wavStreamPlayerRef = useRef<WavStreamPlayer>(new WavStreamPlayer({ sampleRate: 24000 }));
 
-  const [items, setItems] = useState<FormattedItem[]>([]);
-
+  const realtimeClientRef = useRef<RealtimeClient | null>(null);
+  const [isRealtimeConnect, setIsRealtimeConnect] = useState(false);
+  const [isRealtimeLoading, setIsRealtimeLoading] = useState(false);
+  const [conversationItems, setConversationItems] = useState<FormattedItem[]>([]);
   const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
+  const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
 
-  const formRef = useRef<FormInstance<LoginParams>>(null);
-
-  // useEffect(() => {
-  //   console.log('items', items);
-
-  //   const transcriptList = items.filter(
-  //     (item) => item.role === 'assistant' && item.status === 'completed' && item.formatted.transcript,
-  //   );
-  //   console.log('transcriptList', transcriptList);
-
-  //   const msg = transcriptList.at(-1)?.formatted?.transcript;
-
-  //   console.log('msg', msg);
-
-  //   // msg && handleSpeak(msg);
-  // }, [items]);
+  const formRef = useRef<FormInstance<Config>>(null);
+  const heygenConfigRef = useRef<FormInstance<HeygenConfig>>(null);
 
   useEffect(() => {
-    return () => {
-      // cleanup; resets to defaults
-      clientRef.current?.reset();
-    };
+    heygenConfigRef.current?.setFieldsValue({
+      quality: AvatarQuality.Low,
+      avatarName: 'June_HR_public',
+      voice: {
+        rate: 1,
+        emotion: VoiceEmotion.EXCITED,
+      },
+      language: 'zh-CN',
+    });
   }, []);
 
-  const [isConnect, setIsConnect] = useState(false);
-
-  const initOpenAi = async () => {
+  const initRealtime = async () => {
     // const client = clientRef.current;
+    setIsRealtimeLoading(true);
     const wavRecorder = wavRecorderRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
 
@@ -86,16 +108,19 @@ const OpenAIConnHeygen = () => {
       // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
     } catch (e) {
       console.log(e);
+      setIsRealtimeConnect(false);
+    } finally {
+      setIsRealtimeLoading(false);
     }
   };
 
-  const connectConversation = useCallback(async (conf: LoginParams) => {
+  const connectConversation = useCallback(async (conf: Config) => {
     const wavRecorder = wavRecorderRef.current;
     // const wavStreamPlayer = wavStreamPlayerRef.current;
 
     const client = new RealtimeClient({
       dangerouslyAllowAPIKeyInBrowser: true,
-      apiKey: conf.apiKey,
+      apiKey: conf.openai_key,
     });
 
     // client.updateSession({ instructions: conf.instructions });
@@ -123,7 +148,6 @@ const OpenAIConnHeygen = () => {
 
     client.on('error', (event) => {
       console.log('error', event);
-      // do thing
     });
 
     // client.on('conversation.interrupted', async (event) => {
@@ -139,38 +163,33 @@ const OpenAIConnHeygen = () => {
     //   }
     // });
 
-    client.on('conversation.updated', ({ item, delta }) => {
+    client.on('conversation.updated', ({ item }) => {
+      // TODO: text
+      if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
+        setMessage(item.formatted.transcript);
+      }
+
+      // TODO: audio
+
       // if (delta?.audio) {
       //   console.log('delta', delta);
       //   // console.log('item.status', JSON.stringify(item.status));
       //   wavStreamPlayer.add16BitPCM(delta.audio, item.id);
       // }
 
-      if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
-        console.log('delta', delta);
-        console.log('item', item);
-
-        setText(item.formatted.transcript);
-        // console.log('item.status', JSON.stringify(item.status));
-      }
-
       // if (item.status === 'completed' && item.formatted.audio?.length) {
-      // console.log('conversation.updated delta', delta);
-      // console.log('conversation.updated item', item);
-      //   console.log('2');
       //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
       //   item.formatted.file = wavFile;
       // }
 
-      const items = client.conversation.getItems();
-
-      setItems(items);
+      setConversationItems(client.conversation.getItems());
     });
 
-    setItems(client.conversation.getItems());
+    setConversationItems(client.conversation.getItems());
 
     await client.connect();
 
+    // TODO: prologue
     client.sendUserMessageContent([
       {
         type: `input_text`,
@@ -180,23 +199,21 @@ const OpenAIConnHeygen = () => {
     ]);
 
     if (isVadmode) {
-      await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
+      await wavRecorder.record((data) => client.appendInputAudio(data.mono));
     }
 
-    clientRef.current = client;
-
-    setIsConnect(true);
+    realtimeClientRef.current = client;
+    setIsRealtimeConnect(true);
     setRealtimeEvents([]);
-    setItems(client.conversation.getItems());
   }, []);
 
   const disconnectConversation = useCallback(async () => {
-    setIsConnect(false);
-    setRealtimeEvents([]);
-    setItems([]);
+    setIsRealtimeConnect(false);
+    // setRealtimeEvents([]);
+    // setConversationItems([]);
     // setMemoryKv({});
 
-    const client = clientRef.current;
+    const client = realtimeClientRef.current;
     client?.disconnect();
 
     const wavRecorder = wavRecorderRef.current;
@@ -207,61 +224,52 @@ const OpenAIConnHeygen = () => {
   }, []);
 
   const updateRealtimeSession = (instructions: string) => {
-    const client = clientRef.current;
+    const client = realtimeClientRef.current;
 
     const prompt = RealtimePromptWorklet.replace('##SCENE_DESCRIPTION##', JSON.stringify(instructions));
 
-    console.log('updateRealtimeSession instructions', instructions);
-    console.log('prompt', prompt);
+    // console.log('updateRealtimeSession instructions', instructions);
+    // console.log('prompt', prompt);
 
     client?.updateSession({ instructions: prompt });
   };
 
-  const [text, setText] = useState('');
+  // const sendTextToRealtime = () => {
+  //   const client = realtimeClientRef.current;
 
-  const sendText = () => {
-    const client = clientRef.current;
+  //   client?.sendUserMessageContent([{ type: 'input_text', text: text }]);
+  // };
 
-    client?.sendUserMessageContent([{ type: 'input_text', text: text }]);
-  };
+  // const [isRecording, setIsRecording] = useState(false);
+  // const [canPushToTalk, setCanPushToTalk] = useState(true);
 
-  useEffect(() => {
-    console.log(text);
+  // const startRecording = async () => {
+  //   setIsRecording(true);
+  //   const client = clientRef.current;
+  //   const wavRecorder = wavRecorderRef.current;
+  //   const wavStreamPlayer = wavStreamPlayerRef.current;
+  //   const trackSampleOffset = await wavStreamPlayer.interrupt();
+  //   if (trackSampleOffset?.trackId) {
+  //     const { trackId, offset } = trackSampleOffset;
+  //     client?.cancelResponse(trackId, offset);
+  //   }
+  //   await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
+  // };
 
-    handleSpeak(text);
-  }, [text]);
-
-  const [isRecording, setIsRecording] = useState(false);
-
-  const startRecording = async () => {
-    setIsRecording(true);
-    const client = clientRef.current;
-    const wavRecorder = wavRecorderRef.current;
-    const wavStreamPlayer = wavStreamPlayerRef.current;
-    const trackSampleOffset = await wavStreamPlayer.interrupt();
-    if (trackSampleOffset?.trackId) {
-      const { trackId, offset } = trackSampleOffset;
-      client?.cancelResponse(trackId, offset);
-    }
-    await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
-  };
-
-  const stopRecording = async () => {
-    setIsRecording(false);
-    const client = clientRef.current;
-    const wavRecorder = wavRecorderRef.current;
-    await wavRecorder.pause();
-    client?.createResponse();
-  };
+  // const stopRecording = async () => {
+  //   setIsRecording(false);
+  //   const client = clientRef.current;
+  //   const wavRecorder = wavRecorderRef.current;
+  //   await wavRecorder.pause();
+  //   client?.createResponse();
+  // };
 
   const [isVadmode, setVadMode] = useState(true);
 
-  const [canPushToTalk, setCanPushToTalk] = useState(true);
-
-  const changeTurnEndType = async (value: boolean) => {
+  const switchRealtimeMode = async (value: boolean) => {
     setVadMode(value);
 
-    const client = clientRef.current;
+    const client = realtimeClientRef.current;
     const wavRecorder = wavRecorderRef.current;
     if (!value && wavRecorder.getStatus() === 'recording') {
       await wavRecorder.pause();
@@ -273,9 +281,11 @@ const OpenAIConnHeygen = () => {
 
     if (value && client?.isConnected) {
       await wavRecorder.record((data) => client.appendInputAudio(data.mono));
+    } else {
+      wavRecorder.end();
     }
 
-    setCanPushToTalk(!value);
+    // setCanPushToTalk(!value);
   };
 
   // function startCall() {
@@ -347,302 +357,397 @@ const OpenAIConnHeygen = () => {
   //   }
   // };
 
-  const avatar = useRef<StreamingAvatar | null>(null);
-  const [stream, setStream] = useState<MediaStream>();
+  const heygenClientRef = useRef<StreamingAvatar | null>(null);
+  const [heygenStream, setHeygenStream] = useState<MediaStream>();
   const mediaStream = useRef<HTMLVideoElement>(null);
-
-  const [token, setToken] = useState<string>('');
-
-  const [isLoadingSession, setIsLoadingSession] = useState(false);
-  const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
-  const [isUserTalking, setIsUserTalking] = useState(false);
-  const [debug, setDebug] = useState<string>();
+  const [isHeygenConnect, setIsHeygenConnect] = useState(false);
+  const [isHeygenLoading, setIsHeygenLoading] = useState(false);
+  // const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
+  // const [isUserTalking, setIsUserTalking] = useState(false);
+  // const [debug, setDebug] = useState<string>();
 
   // const [chatMode, setChatMode] = useState('text_mode');
   // const [data, setData] = useState<StartAvatarResponse>();
 
-  useEffect(() => {
-    initHeygen();
+  const getHeygenToken = async () => {
+    try {
+      const res = await formRef.current?.validate();
 
-    return () => {
-      endSession();
-    };
-  }, []);
+      const { data } = await heygen.getHeygenToken(res?.heygen_key!);
 
-  useEffect(() => {
-    if (stream && mediaStream.current) {
-      mediaStream.current.srcObject = stream;
-      mediaStream.current.onloadedmetadata = () => {
-        mediaStream.current!.play();
-        // setDebug('Playing');
-      };
-    }
-  }, [mediaStream, stream]);
+      if (!data.error && data.token) {
+        // setHeygenToken(data.token);
 
-  const initHeygen = async () => {
-    const { data } = await getHeygenToken();
-    console.log('data', data);
-
-    if (!data.error && data.token) {
-      setToken(data.token);
+        return data.token;
+      }
+    } catch (e) {
+      console.log(e);
     }
   };
 
-  async function handleSpeak(t: string) {
-    setIsLoadingRepeat(true);
+  const handleSpeakMessage = async (message: string) => {
+    // setIsLoadingRepeat(true);
+    const client = heygenClientRef.current;
 
-    if (!avatar.current) {
+    if (!client) {
       // setDebug('Avatar API not initialized');
 
       return;
     }
-    // speak({ text: text, task_type: TaskType.REPEAT })
-    await avatar.current.speak({ text: t, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC }).catch((e) => {
-      setDebug(e.message);
-    });
 
-    setIsLoadingRepeat(false);
-  }
+    // TODO: TaskMode.ASYNC
+    await client.speak({ text: message, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC });
 
-  // async function handleInterrupt() {
-  //   if (!avatar.current) {
-  //     setDebug('Avatar API not initialized');
+    // setIsLoadingRepeat(false);
+  };
 
-  //     return;
-  //   }
+  const stopHeygen = async () => {
+    await heygenClientRef.current?.stopAvatar();
+    setHeygenStream(undefined);
+    setIsHeygenConnect(false);
+  };
 
-  //   await avatar.current.interrupt().catch((e) => {
-  //     setDebug(e.message);
-  //   });
-  // }
+  const initHeygen = async () => {
+    const conf = await heygenConfigRef.current?.validate();
 
-  async function endSession() {
-    await avatar.current?.stopAvatar();
-    setStream(undefined);
-  }
+    setIsHeygenLoading(true);
 
-  async function startSession() {
-    setIsLoadingSession(true);
-    // const newToken = await fetchAccessToken();
+    const newToken = await getHeygenToken();
 
-    const newToken = token;
-    // console.log('newToken', newToken);
-    avatar.current = new StreamingAvatar({
+    if (!newToken) {
+      return;
+    }
+
+    heygenClientRef.current = new StreamingAvatar({
       token: newToken,
     });
-    // console.log('avatar', avatar.current);
 
-    avatar.current.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
+    const client = heygenClientRef.current;
+
+    client.on(StreamingEvents.AVATAR_START_TALKING, (e) => {
       console.log('Avatar started talking', e);
     });
 
-    avatar.current.on(StreamingEvents.AVATAR_STOP_TALKING, (e) => {
+    client.on(StreamingEvents.AVATAR_STOP_TALKING, (e) => {
       console.log('Avatar stopped talking', e);
     });
 
-    avatar.current.on(StreamingEvents.STREAM_DISCONNECTED, () => {
+    client.on(StreamingEvents.STREAM_DISCONNECTED, () => {
       console.log('Stream disconnected');
-      endSession();
+      stopHeygen();
     });
 
-    avatar.current?.on(StreamingEvents.STREAM_READY, (event) => {
+    client.on(StreamingEvents.STREAM_READY, (event) => {
       console.log('>>>>> Stream ready:', event.detail);
-      setStream(event.detail);
+      setHeygenStream(event.detail);
     });
 
-    avatar.current?.on(StreamingEvents.USER_START, (event) => {
+    client.on(StreamingEvents.USER_START, (event) => {
       console.log('>>>>> User started talking:', event);
-      setIsUserTalking(true);
+      // setIsUserTalking(true);
     });
 
-    avatar.current?.on(StreamingEvents.USER_STOP, (event) => {
+    client.on(StreamingEvents.USER_STOP, (event) => {
       console.log('>>>>> User stopped talking:', event);
-      setIsUserTalking(false);
+      // setIsUserTalking(false);
     });
 
     try {
-      const res = await avatar.current.createStartAvatar({
-        quality: AvatarQuality.Low,
-        avatarName: 'June_HR_public',
-        // avatarName: 'Wayne_20240711',
-        // knowledgeId: '', // Or use a custom `knowledgeBase`.
-        voice: {
-          rate: 1.5, // 0.5 ~ 1.5
-          emotion: VoiceEmotion.EXCITED,
-        },
-        language: 'zh-CN',
-      });
+      const res = await client.createStartAvatar({ ...conf! });
 
       console.log('res', res);
 
-      // setData(res);
-      // default to voice mode
-      await avatar.current?.startVoiceChat();
-      // await avatar.current?.startListening();
-      // setChatMode('voice_mode');
+      // await client.startVoiceChat();
+      setIsHeygenConnect(true);
     } catch (error) {
+      setIsHeygenConnect(false);
       console.error('Error starting avatar session:', error);
     } finally {
-      setIsLoadingSession(false);
+      setIsHeygenLoading(false);
     }
-  }
+  };
 
   // async function startListening() {
   //   await avatar.current?.startListening();
   // }
 
-  const videoStream = useRef<HTMLVideoElement>(null);
+  const localStream = useRef<HTMLVideoElement>(null);
+  const [isLocalConnect, setIsLocalConnect] = useState(false);
 
-  async function startVideo() {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 300, height: 240 },
-      // audio: true,
-    });
+  const timer = useRef<NodeJS.Timeout | null>(null);
 
-    videoStream.current!.srcObject = stream;
-
-    setTimeout(async () => {
-      const img = analyzeImgPath();
-
-      const response = await analysisImg([img]);
-
-      await initOpenAi();
-
-      response && updateRealtimeSession(response);
-
-      loopSessionTimer();
-    }, 1000);
-  }
-
-  const timer = useRef<NodeJS.Timer>();
-
-  const imgArr = useRef<string[]>([]);
-
-  const loopSessionTimer = () => {
-    timer.current = setInterval(async () => {
-      if (imgArr.current.length === 3) {
-        const response = await analysisImg(imgArr.current);
-
-        response && updateRealtimeSession(response);
-
-        imgArr.current = [];
-      } else {
-        const img = analyzeImgPath();
-
-        imgArr.current.push(img);
-      }
-    }, 3000);
-  };
-
-  // const stopVideo = () => {
-  //   const stream = videoStream.current!.srcObject as MediaStream;
-  //   const tracks = stream.getTracks();
-  //   tracks.forEach((track) => track.stop());
-  // };
+  const localPhotoList = useRef<string[]>([]);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const analyzeImgPath = () => {
-    const canvas = canvasRef.current!;
+  const [space, setSpace] = useState(3);
+  const [batchNum, setBatchNum] = useState(3);
 
-    canvas.width = videoStream.current?.videoWidth!;
-    canvas.height = videoStream.current?.videoHeight!;
-    // console.log(videoRef.videoWidth)
-    // console.log(videoRef.videoHeight)
+  const loopUpdateSessionTimer = () => {
+    const spaceTime = space * 1000;
+
+    timer.current = setInterval(async () => {
+      if (localPhotoList.current.length === batchNum) {
+        const response = await getPromptByAnalysisLocalPhoto(localPhotoList.current);
+
+        response && updateRealtimeSession(response);
+
+        localPhotoList.current = [];
+      } else {
+        const img = getLocalPhotoPath();
+
+        localPhotoList.current.push(img);
+      }
+    }, spaceTime);
+  };
+
+  const stopLocalCamera = () => {
+    const stream = localStream.current!.srcObject as MediaStream;
+    const tracks = stream.getTracks();
+    tracks.forEach((track) => track.stop());
+    setIsLocalConnect(false);
+    timer.current && clearInterval(timer.current);
+    timer.current = null;
+  };
+
+  const initLocalCamera = async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 300, height: 200 },
+      // audio: true,
+    });
+
+    localStream.current!.srcObject = stream;
+    setIsLocalConnect(true);
+    // TODO:
+    setTimeout(async () => {
+      const img = getLocalPhotoPath();
+
+      const response = await getPromptByAnalysisLocalPhoto([img]);
+
+      await initRealtime();
+
+      response && updateRealtimeSession(response);
+
+      loopUpdateSessionTimer();
+    }, 1000);
+  };
+
+  const getLocalPhotoPath = () => {
+    const canvas = canvasRef.current!;
+    const video = localStream.current!;
+
+    canvas.width = video?.videoWidth;
+    canvas.height = video?.videoHeight;
+
     const canvasCtx = canvas.getContext('2d');
 
-    canvasCtx?.drawImage(videoStream.current!, 0, 0); // canvas 拍照
+    canvasCtx?.drawImage(video, 0, 0);
 
-    const image = new Image(); //必须使用 Image ，不然 canvas 的 toDataURL 方法会报错，可不是闲着蛋疼
+    const image = new Image();
 
     image.src = canvas.toDataURL('image/png');
 
-    // console.log('image', image);
-
     return image.src;
-
-    // const params = { file: image.src, directory: 'order/' + props.orderSn };
-    // const params = { file: '123' }
   };
 
-  const uploadImg = async () => {
-    const img = analyzeImgPath();
+  // const uploadLocalPhotoImgToRealtime = async () => {
+  //   const img = getLocalPhotoPath();
 
-    const response = await analysisImg([img]);
+  //   const response = await getPromptByAnalysisLocalPhoto([img]);
 
-    console.log('response', response);
-  };
+  //   console.log('response', response);
+  // };
 
-  const analysisImg = async (imgs: string[]) => {
-    const client = new OpenAI({
-      apiKey: DefaultOpenAIKey,
-      dangerouslyAllowBrowser: true,
-    });
+  const getPromptByAnalysisLocalPhoto = async (imgs: string[]) => {
+    try {
+      const res = await formRef.current?.validate();
 
-    const imgList: ChatCompletionContentPartImage[] = imgs.map((img) => {
-      return {
-        type: 'image_url',
-        image_url: {
-          url: img,
-        },
-      };
-    });
+      const client = new OpenAI({
+        apiKey: res?.openai_key,
+        dangerouslyAllowBrowser: true,
+      });
 
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: AnalysisPromptWorklet,
-            },
-            ...imgList,
-          ],
-        },
-      ],
-      response_format: { type: 'json_object' },
-      // temperature: 0.9,
-      // top_p: 1,
-    });
+      const imgList: ChatCompletionContentPartImage[] = imgs.map((img) => {
+        return {
+          type: 'image_url',
+          image_url: {
+            url: img,
+          },
+        };
+      });
 
-    console.log('response', response);
+      const response = await client.chat.completions.create({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: AnalysisPromptWorklet,
+              },
+              ...imgList,
+            ],
+          },
+        ],
+        response_format: { type: 'json_object' },
+        // temperature: 0.9,
+        // top_p: 1,
+      });
 
-    if (response.choices[0].message.content) {
-      return JSON.stringify(response.choices[0].message.content);
+      if (response.choices[0].message.content) {
+        return JSON.stringify(response.choices[0].message.content);
+      }
+
+      return response.choices[0].message.content;
+    } catch (e) {
+      console.log(e);
     }
-
-    return response.choices[0].message.content;
   };
+
+  const connect = () => {
+    initHeygen();
+
+    initLocalCamera();
+
+    // initRealtime();
+  };
+
+  const disconnect = () => {
+    stopHeygen();
+
+    disconnectConversation();
+
+    stopLocalCamera();
+  };
+
+  useEffect(() => {
+    if (heygenStream && mediaStream.current) {
+      mediaStream.current.srcObject = heygenStream;
+      mediaStream.current.onloadedmetadata = () => {
+        mediaStream.current!.play();
+        // setDebug('Playing');
+      };
+    }
+  }, [mediaStream, heygenStream]);
+
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    console.log('message', message);
+
+    handleSpeakMessage(message);
+  }, [message]);
+
+  useEffect(() => {
+    return () => {
+      // cleanup; resets to defaults
+      realtimeClientRef.current?.reset();
+      stopHeygen();
+      timer.current && clearInterval(timer.current);
+      timer.current = null;
+    };
+  }, []);
+
+  const [isCollapse, setIsCollapse] = useState(false);
+
+  const switchCollapse = () => {
+    setIsCollapse((prev) => !prev);
+  };
+
+  const isConnect = useCallback(() => {
+    return isRealtimeConnect && isHeygenConnect;
+  }, [isRealtimeConnect, isHeygenConnect]);
+
+  const isLoading = useCallback(() => {
+    return isRealtimeLoading || isHeygenLoading;
+  }, [isRealtimeLoading, isHeygenLoading]);
 
   return (
-    <div className='container flex'>
-      <section className='control-container'>
-        <Card title='control'>
-          <Form ref={formRef} wrapperCol={{ span: 24 }} size='large'>
-            <Form.Item field='apiKey' label='openai_key' initialValue={DefaultOpenAIKey} rules={[{ required: true }]}>
-              <TextArea></TextArea>
-            </Form.Item>
-            <Form.Item
-              field='instructions'
-              label='instructions'
-              initialValue={DefaultInstructions}
-              rules={[{ required: true }]}
-            >
-              <TextArea></TextArea>
-            </Form.Item>
-          </Form>
+    <div className='page-container'>
+      <section className={classNames('control-container', { collapse: isCollapse })}>
+        <Button
+          shape='circle'
+          size='large'
+          icon={<div className={classNames('i-ic:round-keyboard-arrow-right', { 'flip-icon': !isCollapse })}></div>}
+          className='control-btn flex-center'
+          onClick={switchCollapse}
+        />
+        <Form ref={formRef} labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} size='large'>
+          <Form.Item field='openai_key' label='openai_key' initialValue={DefaultOpenAIKey} rules={[{ required: true }]}>
+            <TextArea></TextArea>
+          </Form.Item>
+          <Form.Item field='heygen_key' label='heygen_key' initialValue={DefaultHeygenKey} rules={[{ required: true }]}>
+            <TextArea></TextArea>
+          </Form.Item>
+        </Form>
+        <Space>
           <div className='m-b4'>
-            Status: {isConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+            Realtime Status:
+            {isRealtimeConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
           </div>
           <div className='m-b4'>
-            Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={changeTurnEndType} />
+            Heygen Status: {isHeygenConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
           </div>
-          <Button className='text-white' type='primary' onClick={isConnect ? disconnectConversation : initOpenAi}>
-            {isConnect ? 'DisConnect' : 'Connect'}
-          </Button>
-          <Row className='mt-4'>
+        </Space>
+        <div className='m-b4'>
+          Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={switchRealtimeMode} />
+        </div>
+        <Form
+          disabled={isConnect()}
+          ref={heygenConfigRef}
+          labelCol={{ span: 6 }}
+          wrapperCol={{ span: 18 }}
+          size='large'
+        >
+          <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
+            <Select>
+              {QualityOptions.map((option) => (
+                <Select.Option key={option} value={option}>
+                  {option}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item field='avatarName' label='avatar'>
+            <Input />
+          </Form.Item>
+          <Form.Item field='voice.emotion' label='emotion'>
+            <Select>
+              {VoiceEmotionOptions.map((option) => (
+                <Select.Option key={option} value={option}>
+                  {option}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item field='voice.rate' label='rate' initialValue={1}>
+            <InputNumber min={0} max={1.5} step={0.1}></InputNumber>
+          </Form.Item>
+          {/* <Form.Item field='language' label='language'>
+            <Select></Select>
+          </Form.Item> */}
+        </Form>
+        <Space>
+          <div className='m-b4'>
+            Batch Analysis Quantity:
+            <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
+          </div>
+          <div className='m-b4'>
+            Interval time:
+            <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
+          </div>
+        </Space>
+        <Button
+          className='text-white'
+          type='primary'
+          size='large'
+          loading={isLoading()}
+          onClick={isConnect() ? disconnect : connect}
+        >
+          {isConnect() ? 'DisConnect' : 'Connect'}
+        </Button>
+        {/* <Row className='mt-4'>
             {isConnect && canPushToTalk && !isVadmode && (
               <Button
                 // buttonStyle={isRecording ? 'alert' : 'regular'}
@@ -654,151 +759,118 @@ const OpenAIConnHeygen = () => {
                 {isRecording ? 'release to send' : 'push to talk'}
               </Button>
             )}
-          </Row>
+          </Row> */}
+      </section>
 
-          <Card className='m-t4'>
-            <Input value={text} onChange={(e) => setText(e)}></Input>
-            <Button disabled={!isConnect} className='text-white mt-2' onClick={sendText}>
-              Send
-            </Button>
-          </Card>
-          {/* <Card className='m-t4'>
-            <Button disabled={!isConnect} className='text-white' onClick={startCall}>
-              StartCall
-            </Button>
-          </Card> */}
-        </Card>
-      </section>
-      <section className='control-container'>
-        <Card title='events'>
-          <div className='content-block-body'>
-            {!realtimeEvents.length && `awaiting connection...`}
-            {realtimeEvents.map((realtimeEvent) => {
-              const count = realtimeEvent.count;
-              const event = { ...realtimeEvent.event };
-              if (event.type === 'input_audio_buffer.append') {
-                event.audio = `[trimmed: ${event.audio.length} bytes]`;
-              } else if (event.type === 'response.audio.delta') {
-                event.delta = `[trimmed: ${event.delta.length} bytes]`;
-              }
-              return (
-                <div className='event' key={event.event_id}>
-                  <div className='event-timestamp'>{realtimeEvent.time}</div>
-                  <div className='event-details'>
-                    <div
-                      className='event-summary'
-                      // onClick={() => {
-                      //   // toggle event details
-                      //   const id = event.event_id;
-                      //   const expanded = { ...expandedEvents };
-                      //   if (expanded[id]) {
-                      //     delete expanded[id];
-                      //   } else {
-                      //     expanded[id] = true;
-                      //   }
-                      //   setExpandedEvents(expanded);
-                      // }}
-                    >
-                      <div className={`event-source ${event.type === 'error' ? 'error' : realtimeEvent.source}`}>
-                        {realtimeEvent.source === 'client' ? 1 : 2}
-                        <span>{event.type === 'error' ? 'error!' : realtimeEvent.source}</span>
+      <Layout className='main'>
+        <Layout.Content className='screen-container'>
+          {isLoading() && <Spin loading={isLoading()} size={80} className='loading-status'></Spin>}
+
+          <div className='main-screen'>
+            <video ref={mediaStream} autoPlay playsInline className='video-content'>
+              {/* <track kind='captions' /> */}
+            </video>
+          </div>
+
+          <div className={classNames('assistant-screen', { active: isLocalConnect })}>
+            <video ref={localStream} autoPlay playsInline className='video-content'>
+              {/* <track kind='captions' /> */}
+            </video>
+          </div>
+        </Layout.Content>
+
+        <Layout.Sider resizeDirections={['left']} className='log-container'>
+          <Card title='events'>
+            <div className='content-block-body'>
+              {!realtimeEvents.length && `awaiting connection...`}
+              {realtimeEvents.map((realtimeEvent) => {
+                const count = realtimeEvent.count;
+                const event = { ...realtimeEvent.event };
+                if (event.type === 'input_audio_buffer.append') {
+                  event.audio = `[trimmed: ${event.audio.length} bytes]`;
+                } else if (event.type === 'response.audio.delta') {
+                  event.delta = `[trimmed: ${event.delta.length} bytes]`;
+                }
+                return (
+                  <div className='event' key={event.event_id}>
+                    <div className='event-timestamp'>{dayjs(realtimeEvent.time).format('YYYY-MM-DD HH:mm:ss')}</div>
+                    <div className='event-details'>
+                      <div
+                        className='event-summary'
+                        onClick={() => {
+                          // toggle event details
+                          const id = event.event_id;
+                          const expanded = { ...expandedEvents };
+                          if (expanded[id]) {
+                            delete expanded[id];
+                          } else {
+                            expanded[id] = true;
+                          }
+                          setExpandedEvents(expanded);
+                        }}
+                      >
+                        <div className={`event-source ${event.type === 'error' ? 'error' : realtimeEvent.source}`}>
+                          {realtimeEvent.source === 'client' ? (
+                            <div className='i-ic:round-keyboard-arrow-up'></div>
+                          ) : (
+                            <div className='i-ic:round-keyboard-arrow-down'></div>
+                          )}
+                          <span>{event.type === 'error' ? 'error!' : realtimeEvent.source}</span>
+                        </div>
+                        <div className='event-type'>
+                          {event.type}
+                          {count && ` (${count})`}
+                        </div>
                       </div>
-                      <div className='event-type'>
-                        {event.type}
-                        {count && ` (${count})`}
-                      </div>
+                      {!!expandedEvents[event.event_id] && (
+                        <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
+                      )}
                     </div>
-                    {/* {!!expandedEvents[event.event_id] && (
-                  <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
-                )} */}
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-        <Card title='conversationItem'>
-          <div className='content-block-body'>
-            {!items.length && `awaiting connection...`}
-            {items.map((conversationItem) => {
-              return (
-                <div className='conversation-item' key={conversationItem.id}>
-                  <div className={`speaker ${conversationItem.role || ''}`}>
-                    <div>{conversationItem.role.replaceAll('_', ' ')}</div>
-                    {/* <div className='close' onClick={() => deleteConversationItem(conversationItem.id)}>
-                      <X />
-                    </div> */}
+                );
+              })}
+            </div>
+          </Card>
+          <Card title='conversationItem'>
+            <div className='content-block-body'>
+              {!conversationItems.length && `awaiting connection...`}
+              {conversationItems.map((item) => {
+                return (
+                  <div className='conversation-item' key={item.id}>
+                    <div className={`speaker ${item.role || ''}`}>
+                      <div>{item.role.replaceAll('_', ' ')}</div>
+                    </div>
+                    <div className={`speaker-content`}>
+                      {/* tool response */}
+                      {item.type === 'function_call_output' && <div>{item.formatted.output}</div>}
+                      {/* tool call */}
+                      {!!item.formatted.tool && (
+                        <div>
+                          {item.formatted.tool.name}({item.formatted.tool.arguments})
+                        </div>
+                      )}
+                      {!item.formatted.tool && item.role === 'user' && (
+                        <div>
+                          {item.formatted.transcript ||
+                            (item.formatted.audio?.length
+                              ? '(awaiting transcript)'
+                              : item.formatted.text || '(item sent)')}
+                        </div>
+                      )}
+                      {!item.formatted.tool && item.role === 'assistant' && (
+                        <div>{item.formatted.transcript || item.formatted.text || '(truncated)'}</div>
+                      )}
+                      {item.formatted.file && <audio src={item.formatted.file.url} controls />}
+                    </div>
                   </div>
-                  <div className={`speaker-content`}>
-                    {/* tool response */}
-                    {conversationItem.type === 'function_call_output' && <div>{conversationItem.formatted.output}</div>}
-                    {/* tool call */}
-                    {!!conversationItem.formatted.tool && (
-                      <div>
-                        {conversationItem.formatted.tool.name}({conversationItem.formatted.tool.arguments})
-                      </div>
-                    )}
-                    {!conversationItem.formatted.tool && conversationItem.role === 'user' && (
-                      <div>
-                        {conversationItem.formatted.transcript ||
-                          (conversationItem.formatted.audio?.length
-                            ? '(awaiting transcript)'
-                            : conversationItem.formatted.text || '(item sent)')}
-                      </div>
-                    )}
-                    {!conversationItem.formatted.tool && conversationItem.role === 'assistant' && (
-                      <div>
-                        {conversationItem.formatted.transcript || conversationItem.formatted.text || '(truncated)'}
-                      </div>
-                    )}
-                    {conversationItem.formatted.file && <audio src={conversationItem.formatted.file.url} controls />}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
-      </section>
-      <video
-        ref={mediaStream}
-        autoPlay
-        playsInline
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-        }}
-      >
-        <track kind='captions' />
-      </video>
-      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startSession}>
-        Start
-      </Button>
-      <div>
-        {isLoadingSession}
-        {isUserTalking}
-        {debug}
-        {isLoadingRepeat}
-      </div>
-      <video
-        ref={videoStream}
-        autoPlay
-        playsInline
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: 'contain',
-        }}
-      >
-        <track kind='captions' />
-      </video>
-      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={startVideo}>
-        Start Self
-      </Button>
+                );
+              })}
+            </div>
+          </Card>
+        </Layout.Sider>
+      </Layout>
+
       <canvas id='canvas' ref={canvasRef}></canvas>
-      <Button className='bg-gradient-to-tr from-indigo-500 to-indigo-300 w-full text-white' onClick={uploadImg}>
-        Upload File
-      </Button>
     </div>
   );
 };
