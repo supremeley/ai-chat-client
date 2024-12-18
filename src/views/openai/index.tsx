@@ -40,10 +40,18 @@ const VoiceEmotionOptions = [
   VoiceEmotion.SERIOUS,
   VoiceEmotion.SOOTHING,
 ];
+const ModelOptions = [
+  'gpt-4o-realtime-preview(10-01)',
+  'gpt-4o-realtime-preview-2024-12-17',
+  'gpt-4o-realtime-preview-2024-10-01',
+  'gpt-4o-mini-realtime-preview(12-17)',
+  'gpt-4o-mini-realtime-preview-2024-12-17',
+];
 
 export interface Config {
   openai_key: string;
   heygen_key: string;
+  realtime_model: string;
 }
 
 export interface HeygenConfig {
@@ -87,6 +95,12 @@ const OpenAIConnHeygen = () => {
       },
       language: 'zh-CN',
     });
+
+    formRef.current?.setFieldsValue({
+      openai_key: DefaultOpenAIKey,
+      heygen_key: DefaultHeygenKey,
+      realtime_model: 'gpt-4o-realtime-preview',
+    });
   }, []);
 
   const initRealtime = async () => {
@@ -121,6 +135,7 @@ const OpenAIConnHeygen = () => {
     const client = new RealtimeClient({
       dangerouslyAllowAPIKeyInBrowser: true,
       apiKey: conf.openai_key,
+      model: conf.realtime_model,
     });
 
     // client.updateSession({ instructions: conf.instructions });
@@ -680,6 +695,15 @@ const OpenAIConnHeygen = () => {
           <Form.Item field='heygen_key' label='heygen_key' initialValue={DefaultHeygenKey} rules={[{ required: true }]}>
             <TextArea></TextArea>
           </Form.Item>
+          <Form.Item field='realtime_model' label='realtime_model' rules={[{ required: true }]}>
+            <Select allowClear>
+              {ModelOptions.map((option) => (
+                <Select.Option key={option} value={option}>
+                  {option}
+                </Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
         </Form>
         <Space>
           <div className='m-b4'>
@@ -713,7 +737,7 @@ const OpenAIConnHeygen = () => {
             <Input />
           </Form.Item>
           <Form.Item field='voice.emotion' label='emotion'>
-            <Select>
+            <Select allowClear>
               {VoiceEmotionOptions.map((option) => (
                 <Select.Option key={option} value={option}>
                   {option}
@@ -734,7 +758,7 @@ const OpenAIConnHeygen = () => {
             <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
           </div>
           <div className='m-b4'>
-            Interval time:
+            Interval Time:
             <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
           </div>
         </Space>
