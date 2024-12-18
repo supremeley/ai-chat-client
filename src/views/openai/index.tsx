@@ -13,6 +13,7 @@ import {
   Input,
   InputNumber,
   Select,
+  Message,
 } from '@arco-design/web-react';
 import TextArea from '@arco-design/web-react/es/Input/textarea';
 import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
@@ -120,106 +121,113 @@ const OpenAIConnHeygen = () => {
       }
 
       // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
       setIsRealtimeConnect(false);
+      console.error('initRealtime error:', error);
+      Message.error(JSON.stringify(error));
     } finally {
       setIsRealtimeLoading(false);
     }
   };
 
   const connectConversation = useCallback(async (conf: Config) => {
-    const wavRecorder = wavRecorderRef.current;
-    // const wavStreamPlayer = wavStreamPlayerRef.current;
+    try {
+      const wavRecorder = wavRecorderRef.current;
+      // const wavStreamPlayer = wavStreamPlayerRef.current;
 
-    const client = new RealtimeClient({
-      dangerouslyAllowAPIKeyInBrowser: true,
-      apiKey: conf.openai_key,
-      model: conf.realtime_model,
-    });
-
-    // client.updateSession({ instructions: conf.instructions });
-    client.updateSession({ voice: 'alloy' });
-    client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
-
-    if (isVadmode) {
-      client.updateSession({
-        turn_detection: { type: 'server_vad' },
+      const client = new RealtimeClient({
+        dangerouslyAllowAPIKeyInBrowser: true,
+        apiKey: conf.openai_key,
+        model: conf.realtime_model,
       });
-    }
 
-    client.on('realtime.event', (realtimeEvent) => {
-      setRealtimeEvents((realtimeEvents) => {
-        const lastEvent = realtimeEvents[realtimeEvents.length - 1];
-        if (lastEvent?.event.type === realtimeEvent.event.type) {
-          // if we receive multiple events in a row, aggregate them for display purposes
-          lastEvent.count = (lastEvent.count || 0) + 1;
-          return realtimeEvents.slice(0, -1).concat(lastEvent);
-        } else {
-          return realtimeEvents.concat(realtimeEvent);
-        }
-      });
-    });
+      // client.updateSession({ instructions: conf.instructions });
+      client.updateSession({ voice: 'alloy' });
+      client.updateSession({ input_audio_transcription: { model: 'whisper-1' } });
 
-    client.on('error', (event) => {
-      console.log('error', event);
-    });
-
-    // client.on('conversation.interrupted', async (event) => {
-    //   /* do something */
-
-    //   const trackSampleOffset = await wavStreamPlayer.interrupt();
-
-    //   console.log('conversation.interrupted', trackSampleOffset);
-
-    //   if (trackSampleOffset?.trackId) {
-    //     const { trackId, offset } = trackSampleOffset;
-    //     client.cancelResponse(trackId, offset);
-    //   }
-    // });
-
-    client.on('conversation.updated', ({ item }) => {
-      // TODO: text
-      if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
-        setMessage(item.formatted.transcript);
+      if (isVadmode) {
+        client.updateSession({
+          turn_detection: { type: 'server_vad' },
+        });
       }
 
-      // TODO: audio
+      client.on('realtime.event', (realtimeEvent) => {
+        setRealtimeEvents((realtimeEvents) => {
+          const lastEvent = realtimeEvents[realtimeEvents.length - 1];
+          if (lastEvent?.event.type === realtimeEvent.event.type) {
+            // if we receive multiple events in a row, aggregate them for display purposes
+            lastEvent.count = (lastEvent.count || 0) + 1;
+            return realtimeEvents.slice(0, -1).concat(lastEvent);
+          } else {
+            return realtimeEvents.concat(realtimeEvent);
+          }
+        });
+      });
 
-      // if (delta?.audio) {
-      //   console.log('delta', delta);
-      //   // console.log('item.status', JSON.stringify(item.status));
-      //   wavStreamPlayer.add16BitPCM(delta.audio, item.id);
-      // }
+      client.on('error', (event) => {
+        console.log('error', event);
+      });
 
-      // if (item.status === 'completed' && item.formatted.audio?.length) {
-      //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
-      //   item.formatted.file = wavFile;
-      // }
+      // client.on('conversation.interrupted', async (event) => {
+      //   /* do something */
+
+      //   const trackSampleOffset = await wavStreamPlayer.interrupt();
+
+      //   console.log('conversation.interrupted', trackSampleOffset);
+
+      //   if (trackSampleOffset?.trackId) {
+      //     const { trackId, offset } = trackSampleOffset;
+      //     client.cancelResponse(trackId, offset);
+      //   }
+      // });
+
+      client.on('conversation.updated', ({ item }) => {
+        // TODO: text
+        if (item.status === 'completed' && item.formatted.transcript?.length && item.role === 'assistant') {
+          setMessage(item.formatted.transcript);
+        }
+
+        // TODO: audio
+
+        // if (delta?.audio) {
+        //   console.log('delta', delta);
+        //   // console.log('item.status', JSON.stringify(item.status));
+        //   wavStreamPlayer.add16BitPCM(delta.audio, item.id);
+        // }
+
+        // if (item.status === 'completed' && item.formatted.audio?.length) {
+        //   const wavFile = await WavRecorder.decode(item.formatted.audio, 24000, 24000);
+        //   item.formatted.file = wavFile;
+        // }
+
+        setConversationItems(client.conversation.getItems());
+      });
 
       setConversationItems(client.conversation.getItems());
-    });
 
-    setConversationItems(client.conversation.getItems());
+      await client.connect();
 
-    await client.connect();
+      // TODO: prologue
+      client.sendUserMessageContent([
+        {
+          type: `input_text`,
+          text: `Hello!`,
+          // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
+        },
+      ]);
 
-    // TODO: prologue
-    client.sendUserMessageContent([
-      {
-        type: `input_text`,
-        text: `Hello!`,
-        // text: `For testing purposes, I want you to list ten car brands. Number each item, e.g. "one (or whatever number you are one): the item name".`
-      },
-    ]);
+      if (isVadmode) {
+        await wavRecorder.record((data) => client.appendInputAudio(data.mono));
+      }
 
-    if (isVadmode) {
-      await wavRecorder.record((data) => client.appendInputAudio(data.mono));
+      realtimeClientRef.current = client;
+      setIsRealtimeConnect(true);
+      setRealtimeEvents([]);
+    } catch (error) {
+      setIsRealtimeConnect(false);
+      console.error('connectConversation error:', error);
+      Message.error(JSON.stringify(error));
     }
-
-    realtimeClientRef.current = client;
-    setIsRealtimeConnect(true);
-    setRealtimeEvents([]);
   }, []);
 
   const disconnectConversation = useCallback(async () => {
@@ -232,10 +240,10 @@ const OpenAIConnHeygen = () => {
     client?.disconnect();
 
     const wavRecorder = wavRecorderRef.current;
-    await wavRecorder.end();
+    await wavRecorder?.end();
 
     const wavStreamPlayer = wavStreamPlayerRef.current;
-    await wavStreamPlayer.interrupt();
+    await wavStreamPlayer?.interrupt();
   }, []);
 
   const updateRealtimeSession = (instructions: string) => {
@@ -295,9 +303,9 @@ const OpenAIConnHeygen = () => {
     });
 
     if (value && client?.isConnected) {
-      await wavRecorder.record((data) => client.appendInputAudio(data.mono));
+      await wavRecorder?.record((data) => client.appendInputAudio(data.mono));
     } else {
-      wavRecorder.end();
+      wavRecorder?.end();
     }
 
     // setCanPushToTalk(!value);
@@ -395,25 +403,31 @@ const OpenAIConnHeygen = () => {
 
         return data.token;
       }
-    } catch (e) {
-      console.log(e);
+    } catch (error) {
+      console.error('getHeygenToken error: ', error);
+      Message.error(JSON.stringify(error));
     }
   };
 
   const handleSpeakMessage = async (message: string) => {
-    // setIsLoadingRepeat(true);
-    const client = heygenClientRef.current;
+    try {
+      // setIsLoadingRepeat(true);
+      const client = heygenClientRef.current;
 
-    if (!client) {
-      // setDebug('Avatar API not initialized');
+      if (!client || isConnect() || !message) {
+        // setDebug('Avatar API not initialized');
 
-      return;
+        return;
+      }
+
+      // TODO: TaskMode.ASYNC
+      await client.speak({ text: message, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC });
+
+      // setIsLoadingRepeat(false);
+    } catch (error) {
+      console.error('handleSpeakMessage error: ', error);
+      Message.error(JSON.stringify(error));
     }
-
-    // TODO: TaskMode.ASYNC
-    await client.speak({ text: message, taskType: TaskType.REPEAT, taskMode: TaskMode.SYNC });
-
-    // setIsLoadingRepeat(false);
   };
 
   const stopHeygen = async () => {
@@ -475,8 +489,8 @@ const OpenAIConnHeygen = () => {
       // await client.startVoiceChat();
       setIsHeygenConnect(true);
     } catch (error) {
-      setIsHeygenConnect(false);
-      console.error('Error starting avatar session:', error);
+      console.error('initHeygen error:', error);
+      Message.error(JSON.stringify(error));
     } finally {
       setIsHeygenLoading(false);
     }
@@ -502,16 +516,24 @@ const OpenAIConnHeygen = () => {
     const spaceTime = space * 1000;
 
     timer.current = setInterval(async () => {
-      if (localPhotoList.current.length === batchNum) {
-        const response = await getPromptByAnalysisLocalPhoto(localPhotoList.current);
+      try {
+        if (localPhotoList.current.length === batchNum) {
+          const response = await getPromptByAnalysisLocalPhoto(localPhotoList.current);
 
-        response && updateRealtimeSession(response);
+          response && updateRealtimeSession(response);
 
-        localPhotoList.current = [];
-      } else {
-        const img = getLocalPhotoPath();
+          localPhotoList.current = [];
+        } else {
+          const img = getLocalPhotoPath();
 
-        localPhotoList.current.push(img);
+          localPhotoList.current.push(img);
+        }
+      } catch (error) {
+        disconnectConversation();
+        timer.current && clearInterval(timer.current);
+        timer.current = null;
+        console.error('loopUpdateSessionTimer error:', error);
+        Message.error(JSON.stringify(error));
       }
     }, spaceTime);
   };
@@ -526,25 +548,37 @@ const OpenAIConnHeygen = () => {
   };
 
   const initLocalCamera = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 300, height: 200 },
-      // audio: true,
-    });
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 300, height: 200 },
+        // audio: true,
+      });
 
-    localStream.current!.srcObject = stream;
-    setIsLocalConnect(true);
-    // TODO:
-    setTimeout(async () => {
-      const img = getLocalPhotoPath();
+      localStream.current!.srcObject = stream;
 
-      const response = await getPromptByAnalysisLocalPhoto([img]);
+      setIsLocalConnect(true);
+      // TODO:
+      setTimeout(async () => {
+        try {
+          const img = getLocalPhotoPath();
 
-      await initRealtime();
+          const response = await getPromptByAnalysisLocalPhoto([img]);
 
-      response && updateRealtimeSession(response);
+          await initRealtime();
 
-      loopUpdateSessionTimer();
-    }, 1000);
+          response && updateRealtimeSession(response);
+
+          loopUpdateSessionTimer();
+        } catch (error) {
+          stopLocalCamera();
+          console.error('initLocalCamera error:', error);
+          Message.error(JSON.stringify(error));
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('initLocalCamera error:', error);
+      Message.error(JSON.stringify(error));
+    }
   };
 
   const getLocalPhotoPath = () => {
@@ -565,73 +599,70 @@ const OpenAIConnHeygen = () => {
     return image.src;
   };
 
-  // const uploadLocalPhotoImgToRealtime = async () => {
-  //   const img = getLocalPhotoPath();
-
-  //   const response = await getPromptByAnalysisLocalPhoto([img]);
-
-  //   console.log('response', response);
-  // };
-
   const getPromptByAnalysisLocalPhoto = async (imgs: string[]) => {
-    try {
-      const res = await formRef.current?.validate();
+    // try {
+    const res = await formRef.current?.validate();
 
-      const client = new OpenAI({
-        apiKey: res?.openai_key,
-        dangerouslyAllowBrowser: true,
-      });
+    const client = new OpenAI({
+      apiKey: res?.openai_key,
+      dangerouslyAllowBrowser: true,
+    });
 
-      const imgList: ChatCompletionContentPartImage[] = imgs.map((img) => {
-        return {
-          type: 'image_url',
-          image_url: {
-            url: img,
-          },
-        };
-      });
+    const imgList: ChatCompletionContentPartImage[] = imgs.map((img) => {
+      return {
+        type: 'image_url',
+        image_url: {
+          url: img,
+        },
+      };
+    });
 
-      const response = await client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: AnalysisPromptWorklet,
-              },
-              ...imgList,
-            ],
-          },
-        ],
-        response_format: { type: 'json_object' },
-        // temperature: 0.9,
-        // top_p: 1,
-      });
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: AnalysisPromptWorklet,
+            },
+            ...imgList,
+          ],
+        },
+      ],
+      response_format: { type: 'json_object' },
+      // temperature: 0.9,
+      // top_p: 1,
+    });
 
-      if (response.choices[0].message.content) {
-        return JSON.stringify(response.choices[0].message.content);
-      }
-
-      return response.choices[0].message.content;
-    } catch (e) {
-      console.log(e);
+    if (response.choices[0].message.content) {
+      return JSON.stringify(response.choices[0].message.content);
     }
+
+    return response.choices[0].message.content;
+    // }
+    // catch (error) {
+    //   disconnectConversation();
+    //   timer.current && clearInterval(timer.current);
+    //   timer.current = null;
+    //   console.error('getPromptByAnalysisLocalPhoto error:', error);
+    //   Message.error(JSON.stringify(error));
+    // }
   };
 
-  const connect = () => {
-    initHeygen();
+  const connect = async () => {
+    await initHeygen();
 
-    initLocalCamera();
+    await initLocalCamera();
 
     // initRealtime();
   };
 
-  const disconnect = () => {
-    stopHeygen();
+  const disconnect = async () => {
+    await stopHeygen();
 
-    disconnectConversation();
+    await disconnectConversation();
 
     stopLocalCamera();
   };
@@ -688,7 +719,7 @@ const OpenAIConnHeygen = () => {
           className='control-btn flex-center'
           onClick={switchCollapse}
         />
-        <Form ref={formRef} labelCol={{ span: 6 }} wrapperCol={{ span: 18 }} size='large'>
+        <Form ref={formRef} labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size='large'>
           <Form.Item field='openai_key' label='openai_key' initialValue={DefaultOpenAIKey} rules={[{ required: true }]}>
             <TextArea></TextArea>
           </Form.Item>
@@ -720,8 +751,8 @@ const OpenAIConnHeygen = () => {
         <Form
           disabled={isConnect()}
           ref={heygenConfigRef}
-          labelCol={{ span: 6 }}
-          wrapperCol={{ span: 18 }}
+          labelCol={{ span: 8 }}
+          wrapperCol={{ span: 16 }}
           size='large'
         >
           <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
