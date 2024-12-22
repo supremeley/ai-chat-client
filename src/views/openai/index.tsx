@@ -18,7 +18,7 @@ import {
 import TextArea from '@arco-design/web-react/es/Input/textarea';
 import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
 import { StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
-import { RealtimeClient, type FormattedItem } from 'openai-realtime-api';
+import { RealtimeClient, type FormattedItem, type RealtimeEvent } from 'openai-realtime-api';
 
 import { heygen } from '@/api';
 import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
@@ -65,12 +65,12 @@ export interface HeygenConfig {
   language: string;
 }
 
-interface RealtimeEvent {
-  time: string;
-  source: 'client' | 'server';
+type REvent = RealtimeEvent & {
+  // time: string;
+  // source: 'client' | 'server';
   count?: number;
-  event: Record<string, any>;
-}
+  // event: Record<string, any>;
+};
 
 const OpenAIConnHeygen = () => {
   const wavRecorderRef = useRef<WavRecorder>(new WavRecorder({ sampleRate: 24000 }));
@@ -80,7 +80,7 @@ const OpenAIConnHeygen = () => {
   const [isRealtimeConnect, setIsRealtimeConnect] = useState(false);
   const [isRealtimeLoading, setIsRealtimeLoading] = useState(false);
   const [conversationItems, setConversationItems] = useState<FormattedItem[]>([]);
-  const [realtimeEvents, setRealtimeEvents] = useState<RealtimeEvent[]>([]);
+  const [realtimeEvents, setRealtimeEvents] = useState<REvent[]>([]);
   const [expandedEvents, setExpandedEvents] = useState<Record<string, boolean>>({});
 
   const formRef = useRef<FormInstance<Config>>(null);
@@ -153,13 +153,14 @@ const OpenAIConnHeygen = () => {
 
       client.on('realtime.event', (realtimeEvent) => {
         setRealtimeEvents((realtimeEvents) => {
-          const lastEvent = realtimeEvents[realtimeEvents.length - 1];
+          const lastEvent = realtimeEvents[0];
           if (lastEvent?.event.type === realtimeEvent.event.type) {
             // if we receive multiple events in a row, aggregate them for display purposes
             lastEvent.count = (lastEvent.count || 0) + 1;
-            return realtimeEvents.slice(0, -1).concat(lastEvent);
+            return realtimeEvents.splice(0, 1, lastEvent);
           } else {
-            return realtimeEvents.concat(realtimeEvent);
+            realtimeEvents.unshift(realtimeEvent);
+            return realtimeEvents;
           }
         });
       });
@@ -200,10 +201,10 @@ const OpenAIConnHeygen = () => {
         //   item.formatted.file = wavFile;
         // }
 
-        setConversationItems(client.conversation.getItems());
+        setConversationItems(client.conversation.getItems().reverse());
       });
 
-      setConversationItems(client.conversation.getItems());
+      setConversationItems(client.conversation.getItems().reverse());
 
       await client.connect();
 
@@ -841,11 +842,13 @@ const OpenAIConnHeygen = () => {
               {realtimeEvents.map((realtimeEvent) => {
                 const count = realtimeEvent.count;
                 const event = { ...realtimeEvent.event };
+
                 if (event.type === 'input_audio_buffer.append') {
                   event.audio = `[trimmed: ${event.audio.length} bytes]`;
                 } else if (event.type === 'response.audio.delta') {
                   event.delta = `[trimmed: ${event.delta.length} bytes]`;
                 }
+
                 return (
                   <div className='event' key={event.event_id}>
                     <div className='event-timestamp'>{dayjs(realtimeEvent.time).format('YYYY-MM-DD HH:mm:ss')}</div>
@@ -856,10 +859,10 @@ const OpenAIConnHeygen = () => {
                           // toggle event details
                           const id = event.event_id;
                           const expanded = { ...expandedEvents };
-                          if (expanded[id]) {
-                            delete expanded[id];
+                          if (expanded[id!]) {
+                            delete expanded[id!];
                           } else {
-                            expanded[id] = true;
+                            expanded[id!] = true;
                           }
                           setExpandedEvents(expanded);
                         }}
@@ -877,7 +880,7 @@ const OpenAIConnHeygen = () => {
                           {count && ` (${count})`}
                         </div>
                       </div>
-                      {!!expandedEvents[event.event_id] && (
+                      {!!expandedEvents[event.event_id!] && (
                         <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
                       )}
                     </div>
