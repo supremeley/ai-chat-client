@@ -155,13 +155,14 @@ const OpenAIConnHeygen = () => {
         setRealtimeEvents((realtimeEvents) => {
           const lastEvent = realtimeEvents[0];
           if (lastEvent?.event.type === realtimeEvent.event.type) {
-            // if we receive multiple events in a row, aggregate them for display purposes
+            // if we receive multiple events in a row, aggregate them for displapy purposes
             lastEvent.count = (lastEvent.count || 0) + 1;
-            return realtimeEvents.splice(0, 1, lastEvent);
+            realtimeEvents.splice(0, 1, lastEvent);
           } else {
             realtimeEvents.unshift(realtimeEvent);
-            return realtimeEvents;
           }
+
+          return realtimeEvents;
         });
       });
 
@@ -722,89 +723,102 @@ const OpenAIConnHeygen = () => {
           className='control-btn flex-center'
           onClick={switchCollapse}
         />
-        <Form ref={formRef} labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size='large'>
-          <Form.Item field='openai_key' label='openai_key' initialValue={DefaultOpenAIKey} rules={[{ required: true }]}>
-            <TextArea></TextArea>
-          </Form.Item>
-          <Form.Item field='heygen_key' label='heygen_key' initialValue={DefaultHeygenKey} rules={[{ required: true }]}>
-            <TextArea></TextArea>
-          </Form.Item>
-          <Form.Item field='realtime_model' label='realtime_model' rules={[{ required: true }]}>
-            <Select allowClear>
-              {ModelOptions.map((option) => (
-                <Select.Option key={option} value={option}>
-                  {option}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-        <Space>
+        <section className='scroll-container'>
+          <Form ref={formRef} labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size='large'>
+            <Form.Item
+              field='openai_key'
+              label='openai_key'
+              initialValue={DefaultOpenAIKey}
+              rules={[{ required: true }]}
+            >
+              <TextArea></TextArea>
+            </Form.Item>
+            <Form.Item
+              field='heygen_key'
+              label='heygen_key'
+              initialValue={DefaultHeygenKey}
+              rules={[{ required: true }]}
+            >
+              <TextArea></TextArea>
+            </Form.Item>
+            <Form.Item field='realtime_model' label='realtime_model' rules={[{ required: true }]}>
+              <Select allowClear>
+                {ModelOptions.map((option) => (
+                  <Select.Option key={option} value={option}>
+                    {option}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+          <Space>
+            <div className='m-b4'>
+              Realtime Status:
+              {isRealtimeConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+            </div>
+            <div className='m-b4'>
+              Heygen Status:{' '}
+              {isHeygenConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+            </div>
+          </Space>
           <div className='m-b4'>
-            Realtime Status:
-            {isRealtimeConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+            Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={switchRealtimeMode} />
           </div>
-          <div className='m-b4'>
-            Heygen Status: {isHeygenConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
-          </div>
-        </Space>
-        <div className='m-b4'>
-          Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={switchRealtimeMode} />
-        </div>
-        <Form
-          disabled={isConnect()}
-          ref={heygenConfigRef}
-          labelCol={{ span: 8 }}
-          wrapperCol={{ span: 16 }}
-          size='large'
-        >
-          <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
-            <Select>
-              {QualityOptions.map((option) => (
-                <Select.Option key={option} value={option}>
-                  {option}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item field='avatarName' label='avatar'>
-            <Input />
-          </Form.Item>
-          <Form.Item field='voice.emotion' label='emotion'>
-            <Select allowClear>
-              {VoiceEmotionOptions.map((option) => (
-                <Select.Option key={option} value={option}>
-                  {option}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item field='voice.rate' label='rate' initialValue={1}>
-            <InputNumber min={0} max={1.5} step={0.1}></InputNumber>
-          </Form.Item>
-          {/* <Form.Item field='language' label='language'>
+          <Form
+            disabled={isConnect()}
+            ref={heygenConfigRef}
+            labelCol={{ span: 8 }}
+            wrapperCol={{ span: 16 }}
+            size='large'
+          >
+            <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
+              <Select>
+                {QualityOptions.map((option) => (
+                  <Select.Option key={option} value={option}>
+                    {option}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item field='avatarName' label='avatar'>
+              <Input />
+            </Form.Item>
+            <Form.Item field='voice.emotion' label='emotion'>
+              <Select allowClear>
+                {VoiceEmotionOptions.map((option) => (
+                  <Select.Option key={option} value={option}>
+                    {option}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Form.Item field='voice.rate' label='rate' initialValue={1}>
+              <InputNumber min={0} max={1.5} step={0.1}></InputNumber>
+            </Form.Item>
+            {/* <Form.Item field='language' label='language'>
             <Select></Select>
           </Form.Item> */}
-        </Form>
-        <Space>
-          <div className='m-b4'>
-            Batch Analysis Quantity:
-            <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
-          </div>
-          <div className='m-b4'>
-            Interval Time:
-            <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
-          </div>
-        </Space>
-        <Button
-          className='text-white'
-          type='primary'
-          size='large'
-          loading={isLoading()}
-          onClick={isConnect() ? disconnect : connect}
-        >
-          {isConnect() ? 'DisConnect' : 'Connect'}
-        </Button>
+          </Form>
+          <Space>
+            <div className='m-b4'>
+              Batch Analysis Quantity:
+              <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
+            </div>
+            <div className='m-b4'>
+              Interval Time:
+              <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
+            </div>
+          </Space>
+          <Button
+            className='text-white'
+            type='primary'
+            size='large'
+            loading={isLoading()}
+            onClick={isConnect() ? disconnect : connect}
+          >
+            {isConnect() ? 'DisConnect' : 'Connect'}
+          </Button>
+        </section>
         {/* <Row className='mt-4'>
             {isConnect && canPushToTalk && !isVadmode && (
               <Button

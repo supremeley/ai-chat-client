@@ -41,30 +41,30 @@
   border: 1px solid #fff;
 }
 
-.control {
-  &-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    z-index: 999;
-    box-sizing: border-box;
-    width: 580px;
-    max-height: 100vh;
-    padding: 24px;
-    overflow: auto;
-    background: rgb(255 255 255 / 100%);
-    border-radius: 0 8px 8px 0;
-    transition: 0.5s;
-  }
+// .control {
+//   &-container {
+//     position: fixed;
+//     top: 0;
+//     left: 0;
+//     z-index: 999;
+//     box-sizing: border-box;
+//     width: 580px;
+//     max-height: 100vh;
+//     padding: 24px;
+//     overflow: auto;
+//     background: rgb(255 255 255 / 100%);
+//     border-radius: 0 8px 8px 0;
+//     transition: 0.5s;
+//   }
 
-  &-btn {
-    position: absolute;
-    top: 48px;
-    right: 0;
-    background: rgb(255 255 255 / 100%);
-    transform: translateX(50%);
-  }
-}
+//   &-btn {
+//     position: absolute;
+//     top: 48px;
+//     right: 0;
+//     background: rgb(255 255 255 / 100%);
+//     transform: translateX(50%);
+//   }
+// }
 
 .collapse {
   transform: translateX(-575px);
