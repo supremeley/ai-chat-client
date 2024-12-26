@@ -31,7 +31,7 @@ import dayjs from 'dayjs';
 const DefaultOpenAIKey =
   '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';
 
-const DefaultHeygenKey = 'NzA4NTFhMmEzODU4NDYzN2E4NWNhYTdmYmNlYjY2MTktMTczMzg5MDU3MA==';
+const DefaultHeygenKey = 'OGVlOGFlODI2NjQwNDMzNjhmZGYzNDNhYWNjZjc4MzEtMTczNTAxNTIwMw==';
 
 const QualityOptions = [AvatarQuality.High, AvatarQuality.Medium, AvatarQuality.Low];
 const VoiceEmotionOptions = [
@@ -415,9 +415,11 @@ const OpenAIConnHeygen = () => {
       // setIsLoadingRepeat(true);
       const client = heygenClientRef.current;
 
-      if (!client || isConnect() || !message) {
+      if (!client || !isConnect() || !message) {
         // setDebug('Avatar API not initialized');
-
+        // console.log(!client || isConnect() || !message, 'handleSpeakMessage');
+        // console.log(!client || isConnect() || !message, 'handleSpeakMessage');
+        // console.log(!client || isConnect() || !message, 'handleSpeakMessage');
         return;
       }
 

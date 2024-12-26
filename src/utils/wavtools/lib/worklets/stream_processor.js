@@ -11,6 +11,7 @@ class StreamProcessor extends AudioWorkletProcessor {
     this.trackSampleOffsets = {};
     this.port.onmessage = (event) => {
       if (event.data) {
+      console.log('StreamProcessorWorklet: onmessage', event.data);
         const payload = event.data;
         if (payload.event === 'write') {
           const int16Array = payload.buffer;
@@ -55,6 +56,7 @@ class StreamProcessor extends AudioWorkletProcessor {
       }
     }
     this.writeOffset = offset;
+    console.log('StreamProcessorWorklet: this.write',  this.write);
     return true;
   }
 

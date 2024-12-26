@@ -66,6 +66,7 @@ export class WavStreamPlayer {
     const streamNode = new AudioWorkletNode(this.context, 'stream_processor');
     streamNode.connect(this.context.destination);
     streamNode.port.onmessage = (e) => {
+      console.log('onmessage', JSON.stringify(e.data));
       const { event } = e.data;
       if (event === 'stop') {
         streamNode.disconnect();
@@ -106,6 +107,7 @@ export class WavStreamPlayer {
     } else {
       throw new Error(`argument must be Int16Array or ArrayBuffer`);
     }
+    console.log('add16BitPCM', buffer, trackId);
     this.stream.port.postMessage({ event: 'write', buffer, trackId });
     return buffer;
   }
@@ -139,7 +141,7 @@ export class WavStreamPlayer {
   /**
    * Strips the current stream and returns the sample offset of the audio
    * @param {boolean} [interrupt]
-   * @returns {{trackId: string|null, offset: number, currentTime: number}}
+   * @returns {Promise<{trackId: string|null, offset: number, currentTime: number}>}
    */
   async interrupt() {
     return this.getTrackSampleOffset(true);

@@ -18,4 +18,5 @@ export interface SySState {
   menu: MenuItem[] | [];
   routes: RouteWithMetaObject[] | [];
   routeTagList: RouteTagItem[];
+  curPage: string;
 }

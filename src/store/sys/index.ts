@@ -13,6 +13,7 @@ const initialState: SySState = {
       name: 'home',
     },
   ],
+  curPage: 'Home',
 };
 
 export const systemSlice = createSlice({
@@ -28,9 +29,12 @@ export const systemSlice = createSlice({
     setRouteTagList: (state, action: PayloadAction<RouteTagItem[]>) => {
       state.routeTagList = action.payload;
     },
+    setCurPage: (state, action: PayloadAction<string>) => {
+      state.curPage = action.payload;
+    },
   },
 });
 
-export const { setMenu, setRoutes, setRouteTagList } = systemSlice.actions;
+export const { setMenu, setRoutes, setRouteTagList, setCurPage } = systemSlice.actions;
 
 export default systemSlice.reducer;

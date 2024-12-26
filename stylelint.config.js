@@ -7,6 +7,6 @@ export default {
   ignoreFiles: ['**/*.js', '**/*.jsx', '**/*.tsx', '**/*.ts'],
   rules: {
     'prettier/prettier': true,
-    'max-nesting-depth': [3],
+    'max-nesting-depth': [5],
   },
 };

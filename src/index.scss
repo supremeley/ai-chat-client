@@ -16,6 +16,8 @@
 
   --layout-header-height: 48px;
   --layout-default-black: rgb(0 0 0 / 50%);
+
+  -webkit-tap-highlight-color: transparent;
 }
 
 @media (prefers-color-scheme: light) {
