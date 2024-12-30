@@ -1,6 +1,39 @@
 .page-container {
   width: 100vw;
   height: 100vh;
+
+  .arco-message {
+    padding: 28px 48px !important;
+
+    &-content {
+      font-size: 20px !important;
+    }
+  }
+
+  .arco-resizebox {
+    overflow: unset !important;
+  }
+
+  .arco-layout-sider {
+    box-sizing: border-box;
+    max-height: 600px;
+    padding-right: 0 !important;
+    overflow-y: scroll;
+  }
+
+  .arco-layout-sider-collapsed {
+    width: 5px !important;
+  }
+}
+
+.welcome-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 999999;
+  width: 100vw;
+  height: 100vh;
+  background: #0c0614 url('@/assets/images/loading.png') no-repeat center center / 320px 320px;
 }
 
 .main {
@@ -14,16 +47,67 @@
       position: absolute;
       top: 50%;
       left: 50%;
+      color: #fff;
       transform: translate(-50%, -50%);
+    }
+
+    // .timer-container {
+    //   position: absolute;
+    //   top: 24px;
+    //   left: 24px;
+    //   font-size: 18px;
+    //   color: #fff;
+    // }
+
+    .btn-container {
+      position: absolute;
+      top: 90%;
+      left: 50%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      transform: translate(-50%, -50%);
+
+      .btn {
+        width: 60px;
+        height: 60px;
+        margin-bottom: 10px;
+        font-size: 32px;
+        line-height: 32px;
+        color: #fff;
+        transition: 0.25s;
+
+        // font-size: 48px;
+      }
+
+      .on-call {
+        background-color: #31d05a;
+      }
+
+      .stop-call {
+        background-color: #fd453b;
+      }
+
+      .timer-container {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+      }
+    }
+
+    .video-container {
+      position: absolute;
+      top: 0;
+      left: 0;
     }
   }
 
   .assistant-screen {
     position: absolute;
-    right: 48px;
-    bottom: 48px;
-    width: 240px;
-    height: 160px;
+    right: 6px;
+    bottom: 6px;
+    width: 280px;
+    height: 180px;
   }
 
   .video-content {
@@ -51,7 +135,7 @@
     // overflow-y: auto;
     background: rgb(255 255 255 / 100%);
     border-radius: 0 8px 8px 0;
-    transition: 0.5s;
+    transition: 0.25s;
   }
 
   &-btn {
@@ -64,7 +148,7 @@
 }
 
 .scroll-container {
-  max-height: 100vh;
+  max-height: calc(100vh - 60px);
   overflow-y: auto;
 }
 
@@ -77,6 +161,8 @@
 }
 
 .log-container {
+  position: relative;
+
   // position: fixed;
   // top: 24px;
   // right: 48px;
@@ -84,6 +170,15 @@
   // width: 400px;
   padding: 24px;
   background-color: #fff;
+}
+
+.log-btn {
+  position: absolute;
+  top: 48px;
+  left: 0;
+  z-index: 999;
+  background: rgb(255 255 255 / 100%);
+  transform: translateX(-50%);
 }
 
 .content-block-body {

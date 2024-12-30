@@ -616,7 +616,7 @@ const OpenAIConnHeygen = () => {
   };
 
   return (
-    <div className='page-container'>
+    <div className='mobile-page-container'>
       <section className='screen-container'>
         {isLoading() && <Spin loading={isLoading()} size={80} className='loading-status'></Spin>}
 

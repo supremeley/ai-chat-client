@@ -2,7 +2,6 @@ import './index.scss';
 
 import {
   Button,
-  Card,
   Form,
   type FormInstance,
   Switch,
@@ -14,6 +13,9 @@ import {
   InputNumber,
   Select,
   Message,
+  Collapse,
+  type TableColumnProps,
+  Table,
 } from '@arco-design/web-react';
 import TextArea from '@arco-design/web-react/es/Input/textarea';
 import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
@@ -27,13 +29,16 @@ import { RealtimePromptWorklet } from './realtime-prompt';
 import { AnalysisPromptWorklet } from './analysis—prompt';
 import type { ChatCompletionContentPartImage } from 'openai/resources/index.mjs';
 import dayjs from 'dayjs';
+import type { HeygengSessionItem } from '@/api/heygen/type';
+import CoverImg from '@/assets/images/cover.webp';
 
 const DefaultOpenAIKey =
   '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';
 
-const DefaultHeygenKey = 'OGVlOGFlODI2NjQwNDMzNjhmZGYzNDNhYWNjZjc4MzEtMTczNTAxNTIwMw==';
+const DefaultHeygenKey = 'M2ViNGY0OTAxNzFmNDhjMmFhM2ZlZmY2ZDZmMTZmMzUtMTczNTU0MDc1Ng==';
 
 const QualityOptions = [AvatarQuality.High, AvatarQuality.Medium, AvatarQuality.Low];
+
 const VoiceEmotionOptions = [
   VoiceEmotion.BROADCASTER,
   VoiceEmotion.EXCITED,
@@ -41,6 +46,7 @@ const VoiceEmotionOptions = [
   VoiceEmotion.SERIOUS,
   VoiceEmotion.SOOTHING,
 ];
+
 const ModelOptions = [
   'gpt-4o-realtime-preview(10-01)',
   'gpt-4o-realtime-preview-2024-12-17',
@@ -86,6 +92,8 @@ const OpenAIConnHeygen = () => {
   const formRef = useRef<FormInstance<Config>>(null);
   const heygenConfigRef = useRef<FormInstance<HeygenConfig>>(null);
 
+  const [quota, setQuota] = useState(0);
+
   useEffect(() => {
     heygenConfigRef.current?.setFieldsValue({
       quality: AvatarQuality.Low,
@@ -102,10 +110,16 @@ const OpenAIConnHeygen = () => {
       heygen_key: DefaultHeygenKey,
       realtime_model: 'gpt-4o-realtime-preview',
     });
+
+    // getHeygenRemainingQuota();
   }, []);
 
   const initRealtime = async () => {
     // const client = clientRef.current;
+    if (isRealtimeLoading) {
+      return;
+    }
+
     setIsRealtimeLoading(true);
     const wavRecorder = wavRecorderRef.current;
     const wavStreamPlayer = wavStreamPlayerRef.current;
@@ -123,6 +137,7 @@ const OpenAIConnHeygen = () => {
       // await wavRecorder.record((data) => client?.appendInputAudio(data.mono));
     } catch (error) {
       setIsRealtimeConnect(false);
+      disconnectConversation();
       console.error('initRealtime error:', error);
       Message.error(JSON.stringify(error));
     } finally {
@@ -226,7 +241,8 @@ const OpenAIConnHeygen = () => {
       setIsRealtimeConnect(true);
       setRealtimeEvents([]);
     } catch (error) {
-      setIsRealtimeConnect(false);
+      // setIsRealtimeConnect(false);
+
       console.error('connectConversation error:', error);
       Message.error(JSON.stringify(error));
     }
@@ -435,15 +451,27 @@ const OpenAIConnHeygen = () => {
   };
 
   const stopHeygen = async () => {
+    heygenClientRef.current?.closeVoiceChat();
     await heygenClientRef.current?.stopAvatar();
     setHeygenStream(undefined);
     setIsHeygenConnect(false);
+    connectTimer.current && clearInterval(connectTimer.current);
+    connectTimer.current = null;
+    second.current = 0;
   };
 
   const initHeygen = async () => {
+    if (isHeygenLoading) {
+      return;
+    }
+
     const conf = await heygenConfigRef.current?.validate();
 
     setIsHeygenLoading(true);
+
+    // fetchHeygenRemainingQuota();
+
+    // fetchHeygenSessionData();
 
     const newToken = await getHeygenToken();
 
@@ -467,7 +495,8 @@ const OpenAIConnHeygen = () => {
 
     client.on(StreamingEvents.STREAM_DISCONNECTED, () => {
       console.log('Stream disconnected');
-      stopHeygen();
+      // stopHeygen();
+      disconnect();
     });
 
     client.on(StreamingEvents.STREAM_READY, (event) => {
@@ -491,12 +520,15 @@ const OpenAIConnHeygen = () => {
       console.log('res', res);
 
       // await client.startVoiceChat();
-      setIsHeygenConnect(true);
+      // setIsHeygenConnect(true);
+
+      refresh();
     } catch (error) {
       console.error('initHeygen error:', error);
       Message.error(JSON.stringify(error));
-    } finally {
-      setIsHeygenLoading(false);
+      // setIsHeygenLoading(false);
+      stopHeygen();
+      disconnect();
     }
   };
 
@@ -543,9 +575,21 @@ const OpenAIConnHeygen = () => {
   };
 
   const stopLocalCamera = () => {
-    const stream = localStream.current!.srcObject as MediaStream;
-    const tracks = stream.getTracks();
-    tracks.forEach((track) => track.stop());
+    const stream = localStream.current?.srcObject as MediaStream;
+    console.log('stream', stream);
+    if (stream) {
+      Promise.resolve().then(() => {
+        const tracks = stream.getTracks();
+        tracks.forEach((track) => {
+          console.log('track', track);
+          track.stop();
+        });
+      });
+    } else {
+      console.log('Stream does not exist.');
+    }
+    // const tracks = stream?.getTracks();
+    // tracks?.forEach((track) => track.stop());
     setIsLocalConnect(false);
     timer.current && clearInterval(timer.current);
     timer.current = null;
@@ -574,7 +618,8 @@ const OpenAIConnHeygen = () => {
 
           loopUpdateSessionTimer();
         } catch (error) {
-          stopLocalCamera();
+          disconnect();
+          // stopLocalCamera();
           console.error('initLocalCamera error:', error);
           Message.error(JSON.stringify(error));
         }
@@ -671,12 +716,37 @@ const OpenAIConnHeygen = () => {
     stopLocalCamera();
   };
 
+  const connectTimer = useRef<NodeJS.Timeout | null>(null);
+  const second = useRef<number>(0);
+
+  const connectTimerCalc = () => {
+    const minute = Math.floor(second.current / 60);
+    const secondLeft = second.current % 60;
+
+    return `${addZero(minute)}:${addZero(secondLeft)}`;
+  };
+
+  const addZero = (num: number) => {
+    if (num < 10) {
+      return '0' + num;
+    }
+  };
+
   useEffect(() => {
+    // console.log('heygenStream', heygenStream);
+    // console.log('mediaStream.current', mediaStream.current);
     if (heygenStream && mediaStream.current) {
       mediaStream.current.srcObject = heygenStream;
       mediaStream.current.onloadedmetadata = () => {
+        console.log('mediaStream.current', mediaStream.current);
         mediaStream.current!.play();
+        setIsHeygenConnect(true);
+        setIsHeygenLoading(false);
         // setDebug('Playing');
+
+        connectTimer.current = setInterval(() => {
+          second.current++;
+        }, 1000);
       };
     }
   }, [mediaStream, heygenStream]);
@@ -694,12 +764,13 @@ const OpenAIConnHeygen = () => {
       // cleanup; resets to defaults
       realtimeClientRef.current?.reset();
       stopHeygen();
+      stopLocalCamera();
       timer.current && clearInterval(timer.current);
       timer.current = null;
     };
   }, []);
 
-  const [isCollapse, setIsCollapse] = useState(false);
+  const [isCollapse, setIsCollapse] = useState(true);
 
   const switchCollapse = () => {
     setIsCollapse((prev) => !prev);
@@ -713,113 +784,324 @@ const OpenAIConnHeygen = () => {
     return isRealtimeLoading || isHeygenLoading;
   }, [isRealtimeLoading, isHeygenLoading]);
 
+  // const navigate = useNavigate();
+
+  // const jumpToSessionList = () => {
+  //   navigate('/heygen/session-list');
+  // };
+
+  const fetchHeygenRemainingQuota = async () => {
+    try {
+      const res = await formRef.current?.validate();
+
+      const { data, error } = await heygen.getHeygenRemainingQuota(res?.heygen_key!);
+      // console.log(data);
+      if (!error && data) {
+        setQuota(data.remaining_quota);
+      }
+    } catch (error) {
+      console.error('getHeygenToken error: ', error);
+      Message.error(JSON.stringify(error));
+    }
+  };
+
+  const columns: TableColumnProps<HeygengSessionItem>[] = [
+    {
+      title: 'session_id',
+      width: 100,
+      dataIndex: 'session_id',
+    },
+    {
+      title: 'created_at',
+      width: 100,
+      dataIndex: 'created_at',
+      render: (col) => {
+        return dayjs(col * 1000).format('YYYY/MM/DD HH:mm:ss');
+      },
+    },
+    {
+      title: 'api_key_type',
+      width: 100,
+      dataIndex: 'api_key_type',
+    },
+    {
+      title: 'status',
+      width: 80,
+      dataIndex: 'status',
+    },
+    {
+      title: 'more',
+      width: 60,
+      fixed: 'right',
+      dataIndex: 'operation',
+      render: (_, item) => (
+        <Button
+          type='text'
+          icon={<div className='i-lucide:file-edit mr-1 text-12px'></div>}
+          onClick={() => fetchDisConnect(item)}
+        >
+          Disconnect
+        </Button>
+        // <Row gutter={6}>
+        //   <Col span={10}>
+        //     <Button
+        //       type='text'
+        //       icon={<div className='i-lucide:file-edit mr-1 text-12px'></div>}
+        //       onClick={() => fetchDisConnect(item)}
+        //     >
+        //       Disconnect
+        //     </Button>
+        //   </Col>
+        // </Row>
+      ),
+    },
+  ];
+
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [list, setList] = useState<HeygengSessionItem[]>([]);
+
+  const fetchHeygenSessionData = async () => {
+    setSessionLoading(true);
+
+    // let params: ListParams & LogFilter = {
+    //   page,
+    //   limit,
+    // };
+
+    // if (filter) {
+    //   params = { ...params, ...filter };
+    // }
+
+    // if (filter?.create_time) {
+    //   const [start_time, end_time] = filter.create_time;
+    //   params.start_time = start_time;
+    //   params.end_time = end_time;
+    // }
+
+    try {
+      const res = await formRef.current?.validate();
+
+      const {
+        // code,
+        data: { sessions },
+        // message,
+      } = await heygen.getHeygenSessionList(res?.heygen_key!);
+      // console.log(res);
+      if (sessions?.length) {
+        setList(sessions);
+        //   setTotal(result.total);
+      }
+
+      setSessionLoading(false);
+    } catch (error) {
+      setSessionLoading(false);
+      console.log(error);
+    }
+  };
+
+  const fetchDisConnect = async (item: HeygengSessionItem) => {
+    const params = {
+      session_id: item.session_id,
+    };
+
+    try {
+      const res = await heygen.closeHeygenSession(DefaultHeygenKey, params);
+
+      console.log(res);
+      fetchHeygenSessionData();
+      // if (code === ResultEnum.SUCCESS) {
+      //   void fetchData();
+
+      //   // handleCloseModal();
+
+      //   // editorFormRef.clearFields();
+
+      //   Message.success(msg);
+      // }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  // const fetchOpenAiQuota = async () => {
+  //   try {
+  //     const res = await formRef.current?.validate();
+
+  //     const result = await openai.GetOpenaiQuota(res?.openai_key!);
+  //     console.log(result);
+  //     // if (!error && data) {
+  //     //   setQuota(data.remaining_quota);
+  //     // }
+  //   } catch (error) {
+  //     console.error('getHeygenToken error: ', error);
+  //     Message.error(JSON.stringify(error));
+  //   }
+  // };
+
+  const refresh = async () => {
+    await fetchHeygenRemainingQuota();
+    await fetchHeygenSessionData();
+    // await fetchOpenAiQuota();
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
+
+  const collapsedWidth = 60;
+  const normalWidth = 300;
+
+  const [collapsed, setCollapsed] = useState(true);
+  const [siderWidth, setSiderWidth] = useState(normalWidth);
+
+  const onCollapse = () => {
+    setCollapsed(!collapsed);
+    setSiderWidth(!collapsed ? collapsedWidth : normalWidth);
+  };
+
+  const handleMoving = (
+    e: MouseEvent,
+    size: {
+      width: number;
+      height: number;
+    },
+  ) => {
+    console.log('handleMoving', e);
+    if (size.width > collapsedWidth) {
+      setSiderWidth(size.width);
+      setCollapsed(!(size.width > collapsedWidth + 20));
+    } else {
+      setSiderWidth(collapsedWidth);
+      setCollapsed(true);
+    }
+  };
+
+  const [isWelcome, setIsWelcome] = useState(true);
+
+  useEffect(() => {
+    setTimeout(() => {
+      setIsWelcome(false);
+    }, 2000);
+  }, []);
+
   return (
     <div className='page-container'>
-      <section className={classNames('control-container', { collapse: isCollapse })}>
-        <Button
-          shape='circle'
-          size='large'
-          icon={<div className={classNames('i-ic:round-keyboard-arrow-right', { 'flip-icon': !isCollapse })}></div>}
-          className='control-btn flex-center'
-          onClick={switchCollapse}
-        />
-        <section className='scroll-container'>
-          <Form ref={formRef} labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size='large'>
-            <Form.Item
-              field='openai_key'
-              label='openai_key'
-              initialValue={DefaultOpenAIKey}
-              rules={[{ required: true }]}
-            >
-              <TextArea></TextArea>
-            </Form.Item>
-            <Form.Item
-              field='heygen_key'
-              label='heygen_key'
-              initialValue={DefaultHeygenKey}
-              rules={[{ required: true }]}
-            >
-              <TextArea></TextArea>
-            </Form.Item>
-            <Form.Item field='realtime_model' label='realtime_model' rules={[{ required: true }]}>
-              <Select allowClear>
-                {ModelOptions.map((option) => (
-                  <Select.Option key={option} value={option}>
-                    {option}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Form>
-          <Space>
-            <div className='m-b4'>
-              Realtime Status:
-              {isRealtimeConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
-            </div>
-            <div className='m-b4'>
-              Heygen Status:{' '}
-              {isHeygenConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
-            </div>
-          </Space>
-          <div className='m-b4'>
-            Mode: <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={switchRealtimeMode} />
-          </div>
-          <Form
-            disabled={isConnect()}
-            ref={heygenConfigRef}
-            labelCol={{ span: 8 }}
-            wrapperCol={{ span: 16 }}
+      {isWelcome && <div className='welcome-container'>{/* <img src={LoadingImg} alt='' /> */}</div>}
+
+      {/* {!isWelcome && ( */}
+      <>
+        <section className={classNames('control-container', { collapse: isCollapse })}>
+          <Button
+            shape='circle'
             size='large'
-          >
-            <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
-              <Select>
-                {QualityOptions.map((option) => (
-                  <Select.Option key={option} value={option}>
-                    {option}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item field='avatarName' label='avatar'>
-              <Input />
-            </Form.Item>
-            <Form.Item field='voice.emotion' label='emotion'>
-              <Select allowClear>
-                {VoiceEmotionOptions.map((option) => (
-                  <Select.Option key={option} value={option}>
-                    {option}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item field='voice.rate' label='rate' initialValue={1}>
-              <InputNumber min={0} max={1.5} step={0.1}></InputNumber>
-            </Form.Item>
-            {/* <Form.Item field='language' label='language'>
+            icon={<div className={classNames('i-ic:round-keyboard-arrow-right', { 'flip-icon': !isCollapse })}></div>}
+            className='control-btn flex-center'
+            onClick={switchCollapse}
+          />
+          <section className='scroll-container'>
+            <Form ref={formRef} labelCol={{ span: 8 }} wrapperCol={{ span: 16 }} size='large'>
+              <Form.Item
+                field='openai_key'
+                label='openai_key'
+                initialValue={DefaultOpenAIKey}
+                rules={[{ required: true }]}
+              >
+                <TextArea disabled={isConnect()}></TextArea>
+              </Form.Item>
+              <Form.Item
+                field='heygen_key'
+                label='heygen_key'
+                initialValue={DefaultHeygenKey}
+                rules={[{ required: true }]}
+              >
+                <TextArea disabled={isConnect()}></TextArea>
+              </Form.Item>
+              <Form.Item field='realtime_model' label='realtime_model' rules={[{ required: true }]}>
+                <Select allowClear disabled={isConnect()}>
+                  {ModelOptions.map((option) => (
+                    <Select.Option key={option} value={option}>
+                      {option}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Form>
+            <Space>
+              <div className='m-b4'>
+                Realtime Status:
+                {isRealtimeConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+              </div>
+              <div className='m-b4'>
+                Heygen Status:
+                {isHeygenConnect ? <Tag color='green'>Connected</Tag> : <Tag color='gray'>DisConnected</Tag>}
+              </div>
+            </Space>
+            <div className='m-b4'>
+              Mode:{' '}
+              <Switch checked={isVadmode} checkedText='vad' uncheckedText='manual' onChange={switchRealtimeMode} />
+            </div>
+            <Form
+              disabled={isConnect()}
+              ref={heygenConfigRef}
+              labelCol={{ span: 8 }}
+              wrapperCol={{ span: 16 }}
+              size='large'
+            >
+              <Form.Item field='quality' label='quality' rules={[{ required: true }]}>
+                <Select>
+                  {QualityOptions.map((option) => (
+                    <Select.Option key={option} value={option}>
+                      {option}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item field='avatarName' label='avatar'>
+                <Input />
+              </Form.Item>
+              <Form.Item field='voice.emotion' label='emotion'>
+                <Select allowClear>
+                  {VoiceEmotionOptions.map((option) => (
+                    <Select.Option key={option} value={option}>
+                      {option}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item field='voice.rate' label='rate' initialValue={1}>
+                <InputNumber min={0} max={1.5} step={0.1}></InputNumber>
+              </Form.Item>
+              {/* <Form.Item field='language' label='language'>
             <Select></Select>
           </Form.Item> */}
-          </Form>
-          <Space>
-            <div className='m-b4'>
-              Batch Analysis Quantity:
-              <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
-            </div>
-            <div className='m-b4'>
-              Interval Time:
-              <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
-            </div>
-          </Space>
-          <Button
-            className='text-white'
-            type='primary'
-            size='large'
-            loading={isLoading()}
-            onClick={isConnect() ? disconnect : connect}
-          >
-            {isConnect() ? 'DisConnect' : 'Connect'}
-          </Button>
-        </section>
-        {/* <Row className='mt-4'>
+            </Form>
+            <Space>
+              <div className='m-b4'>
+                Batch Analysis Quantity:
+                <InputNumber disabled={isConnect()} value={batchNum} onChange={(e) => setBatchNum(e)}></InputNumber>
+              </div>
+              <div className='m-b4'>
+                Interval Time:
+                <InputNumber disabled={isConnect()} value={space} onChange={(e) => setSpace(e)}></InputNumber>
+              </div>
+            </Space>
+            {/* <Button
+              className='text-white'
+              type='primary'
+              size='large'
+              loading={isLoading()}
+              onClick={isConnect() ? disconnect : connect}
+            >
+              {isConnect() ? 'DisConnect' : 'Connect'}
+            </Button> */}
+            {/* <Space>
+              isHeygenConnect:{isHeygenConnect}
+              isHeygenLoading:{isHeygenLoading}
+              isRealtimeConnect:{isRealtimeConnect}
+              isRealtimeLoading:{isRealtimeLoading}
+            </Space> */}
+          </section>
+          {/* <Row className='mt-4'>
             {isConnect && canPushToTalk && !isVadmode && (
               <Button
                 // buttonStyle={isRecording ? 'alert' : 'regular'}
@@ -832,117 +1114,189 @@ const OpenAIConnHeygen = () => {
               </Button>
             )}
           </Row> */}
-      </section>
+        </section>
+        <Layout className='main'>
+          <Layout.Content className='screen-container'>
+            {isLoading() && <Spin loading={isLoading()} size={80} className='loading-status'></Spin>}
 
-      <Layout className='main'>
-        <Layout.Content className='screen-container'>
-          {isLoading() && <Spin loading={isLoading()} size={80} className='loading-status'></Spin>}
+            <div className='main-screen'>
+              <video ref={mediaStream} poster={CoverImg} autoPlay playsInline className='video-content'>
+                {/* <track kind='captions' /> */}
+              </video>
+            </div>
 
-          <div className='main-screen'>
-            <video ref={mediaStream} autoPlay playsInline className='video-content'>
-              {/* <track kind='captions' /> */}
-            </video>
-          </div>
-
-          <div className={classNames('assistant-screen', { active: isLocalConnect })}>
-            <video ref={localStream} autoPlay playsInline className='video-content'>
-              {/* <track kind='captions' /> */}
-            </video>
-          </div>
-        </Layout.Content>
-
-        <Layout.Sider resizeDirections={['left']} className='log-container'>
-          <Card title='events'>
-            <div className='content-block-body'>
-              {!realtimeEvents.length && `awaiting connection...`}
-              {realtimeEvents.map((realtimeEvent) => {
-                const count = realtimeEvent.count;
-                const event = { ...realtimeEvent.event };
-
-                if (event.type === 'input_audio_buffer.append') {
-                  event.audio = `[trimmed: ${event.audio.length} bytes]`;
-                } else if (event.type === 'response.audio.delta') {
-                  event.delta = `[trimmed: ${event.delta.length} bytes]`;
+            <div className='btn-container'>
+              <Button
+                className={classNames('btn', { 'on-call': !isConnect(), 'stop-call': isConnect() })}
+                icon={
+                  isConnect() ? (
+                    <div className='i-ic:round-call-end text-32px'></div>
+                  ) : (
+                    <div className='i-ic:round-call text-32px'></div>
+                  )
                 }
+                size='large'
+                shape='circle'
+                loading={isLoading()}
+                onClick={isConnect() ? disconnect : connect}
+              ></Button>
+              {!isConnect() ? (
+                <div className='timer-container'>
+                  <span>Video Call</span>
+                </div>
+              ) : (
+                <div className='timer-container'>
+                  <span>{connectTimerCalc()}</span>
+                </div>
+              )}
+            </div>
 
-                return (
-                  <div className='event' key={event.event_id}>
-                    <div className='event-timestamp'>{dayjs(realtimeEvent.time).format('YYYY-MM-DD HH:mm:ss')}</div>
-                    <div className='event-details'>
-                      <div
-                        className='event-summary'
-                        onClick={() => {
-                          // toggle event details
-                          const id = event.event_id;
-                          const expanded = { ...expandedEvents };
-                          if (expanded[id!]) {
-                            delete expanded[id!];
-                          } else {
-                            expanded[id!] = true;
-                          }
-                          setExpandedEvents(expanded);
-                        }}
-                      >
-                        <div className={`event-source ${event.type === 'error' ? 'error' : realtimeEvent.source}`}>
-                          {realtimeEvent.source === 'client' ? (
-                            <div className='i-ic:round-keyboard-arrow-up'></div>
-                          ) : (
-                            <div className='i-ic:round-keyboard-arrow-down'></div>
+            <div className={classNames('assistant-screen', { active: isLocalConnect })}>
+              <video ref={localStream} autoPlay playsInline className='video-content'>
+                {/* <track kind='captions' /> */}
+              </video>
+            </div>
+          </Layout.Content>
+
+          <Layout.Sider
+            // collapsible
+            // theme='dark'
+            // onCollapse={onCollapse}
+            collapsed={collapsed}
+            resizeDirections={['left']}
+            width={siderWidth}
+            resizeBoxProps={{
+              // directions: ['right'],
+              onMoving: handleMoving,
+            }}
+            className='log-container'
+          >
+            <Button
+              shape='circle'
+              size='large'
+              icon={<div className={classNames('i-ic:round-keyboard-arrow-left', { 'flip-icon': !collapsed })}></div>}
+              className='log-btn flex-center'
+              onClick={onCollapse}
+            />
+            <Collapse defaultActiveKey={['heygenInfo', 'events', 'conversationItem']} style={{ maxWidth: 1180 }}>
+              <Collapse.Item name='heygenInfo' header='Heygen Info'>
+                <Space className='content-block-body'>
+                  <span>Quota:{quota}</span>
+                  <Button type='primary' onClick={refresh}>
+                    Refresh
+                  </Button>
+                </Space>
+                <Table
+                  columns={columns}
+                  data={list}
+                  loading={sessionLoading}
+                  scroll={{ x: true }}
+                  border={{ bodyCell: false }}
+                  pagination={false}
+                  pagePosition='bottomCenter'
+                  rowKey='session_id'
+                  // onChange={handleTableChange}
+                />
+                {/* <div className='content-block-body'>
+                      <Button type='primary' onClick={jumpToSessionList}>
+                        Go Session List
+                      </Button>
+                    </div> */}
+              </Collapse.Item>
+              <Collapse.Item name='events' header='Realtime Events'>
+                <div className='content-block-body'>
+                  {!realtimeEvents.length && `awaiting connection...`}
+                  {realtimeEvents.map((realtimeEvent) => {
+                    const count = realtimeEvent.count;
+                    const event = { ...realtimeEvent.event };
+
+                    if (event.type === 'input_audio_buffer.append') {
+                      event.audio = `[trimmed: ${event.audio.length} bytes]`;
+                    } else if (event.type === 'response.audio.delta') {
+                      event.delta = `[trimmed: ${event.delta.length} bytes]`;
+                    }
+
+                    return (
+                      <div className='event' key={event.event_id}>
+                        <div className='event-timestamp'>{dayjs(realtimeEvent.time).format('YYYY-MM-DD HH:mm:ss')}</div>
+                        <div className='event-details'>
+                          <div
+                            className='event-summary'
+                            onClick={() => {
+                              // toggle event details
+                              const id = event.event_id;
+                              const expanded = { ...expandedEvents };
+                              if (expanded[id!]) {
+                                delete expanded[id!];
+                              } else {
+                                expanded[id!] = true;
+                              }
+                              setExpandedEvents(expanded);
+                            }}
+                          >
+                            <div className={`event-source ${event.type === 'error' ? 'error' : realtimeEvent.source}`}>
+                              {realtimeEvent.source === 'client' ? (
+                                <div className='i-ic:round-keyboard-arrow-up'></div>
+                              ) : (
+                                <div className='i-ic:round-keyboard-arrow-down'></div>
+                              )}
+                              <span>{event.type === 'error' ? 'error!' : realtimeEvent.source}</span>
+                            </div>
+                            <div className='event-type'>
+                              {event.type}
+                              {count && ` (${count})`}
+                            </div>
+                          </div>
+                          {!!expandedEvents[event.event_id!] && (
+                            <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
                           )}
-                          <span>{event.type === 'error' ? 'error!' : realtimeEvent.source}</span>
-                        </div>
-                        <div className='event-type'>
-                          {event.type}
-                          {count && ` (${count})`}
                         </div>
                       </div>
-                      {!!expandedEvents[event.event_id!] && (
-                        <div className='event-payload'>{JSON.stringify(event, null, 2)}</div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-          <Card title='conversationItem'>
-            <div className='content-block-body'>
-              {!conversationItems.length && `awaiting connection...`}
-              {conversationItems.map((item) => {
-                return (
-                  <div className='conversation-item' key={item.id}>
-                    <div className={`speaker ${item.role || ''}`}>
-                      <div>{item.role.replaceAll('_', ' ')}</div>
-                    </div>
-                    <div className={`speaker-content`}>
-                      {/* tool response */}
-                      {item.type === 'function_call_output' && <div>{item.formatted.output}</div>}
-                      {/* tool call */}
-                      {!!item.formatted.tool && (
-                        <div>
-                          {item.formatted.tool.name}({item.formatted.tool.arguments})
+                    );
+                  })}
+                </div>
+              </Collapse.Item>
+              <Collapse.Item name='conversationItem' header='Realtime Conversation Item'>
+                <div className='content-block-body'>
+                  {!conversationItems.length && `awaiting connection...`}
+                  {conversationItems.map((item) => {
+                    return (
+                      <div className='conversation-item' key={item.id}>
+                        <div className={`speaker ${item.role || ''}`}>
+                          <div>{item.role.replaceAll('_', ' ')}</div>
                         </div>
-                      )}
-                      {!item.formatted.tool && item.role === 'user' && (
-                        <div>
-                          {item.formatted.transcript ||
-                            (item.formatted.audio?.length
-                              ? '(awaiting transcript)'
-                              : item.formatted.text || '(item sent)')}
+                        <div className={`speaker-content`}>
+                          {/* tool response */}
+                          {item.type === 'function_call_output' && <div>{item.formatted.output}</div>}
+                          {/* tool call */}
+                          {!!item.formatted.tool && (
+                            <div>
+                              {item.formatted.tool.name}({item.formatted.tool.arguments})
+                            </div>
+                          )}
+                          {!item.formatted.tool && item.role === 'user' && (
+                            <div>
+                              {item.formatted.transcript ||
+                                (item.formatted.audio?.length
+                                  ? '(awaiting transcript)'
+                                  : item.formatted.text || '(item sent)')}
+                            </div>
+                          )}
+                          {!item.formatted.tool && item.role === 'assistant' && (
+                            <div>{item.formatted.transcript || item.formatted.text || '(truncated)'}</div>
+                          )}
+                          {item.formatted.file && <audio src={item.formatted.file.url} controls />}
                         </div>
-                      )}
-                      {!item.formatted.tool && item.role === 'assistant' && (
-                        <div>{item.formatted.transcript || item.formatted.text || '(truncated)'}</div>
-                      )}
-                      {item.formatted.file && <audio src={item.formatted.file.url} controls />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        </Layout.Sider>
-      </Layout>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Collapse.Item>
+            </Collapse>
+          </Layout.Sider>
+        </Layout>
+      </>
+      {/* )} */}
 
       <canvas id='canvas' ref={canvasRef}></canvas>
     </div>
