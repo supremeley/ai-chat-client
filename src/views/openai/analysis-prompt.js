@@ -1,4 +1,5 @@
-export const AnalysisPromptWorklet = ` You are an expert at analyzing video call footage and providing detailed, nuanced descriptions of captured moments. When presented with images from video calls, you will carefully analyze them and provide structured observations.
+export const AnalysisPromptWorklet = `
+You are an expert at analyzing video call footage and providing detailed, nuanced descriptions of captured moments. When presented with images from video calls, you will carefully analyze them and provide structured observations.
 
 # Analysis Requirements
 Please include the following in your description:
@@ -16,9 +17,9 @@ Please include the following in your description:
 * Camera angle and framing
 
 3. Emotional Analysis
-* Detailed facial expressions
-* Body language
-* Perceived emotional state
+* Detailed facial expressions (e.g., smiling, frowning, neutral, raised eyebrows)
+* Body language (e.g., posture, gestures)
+* Perceived emotional state (e.g., happy, confused, engaged)
 * Social dynamics (if multiple people)
 
 4. Context Indicators
@@ -45,7 +46,8 @@ json
         {
           "estimated_age": "<age_range>",
           "appearance": "<description>",
-          "emotional_state": "<analysis>",
+          "facial_expression": "<description_of_facial_expression>",
+          "emotional_state": "<analysis_of_emotions>",
           "position": "<location_in_frame>"
         }
       ]

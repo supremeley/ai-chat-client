@@ -24,7 +24,7 @@ import { heygen } from '@/api';
 import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 import OpenAI from 'openai';
 import { RealtimePromptWorklet } from './realtime-prompt';
-import { AnalysisPromptWorklet } from './analysis—prompt';
+import { AnalysisPromptWorklet } from './analysis-prompt';
 import type { ChatCompletionContentPartImage } from 'openai/resources/index.mjs';
 import dayjs from 'dayjs';
 
