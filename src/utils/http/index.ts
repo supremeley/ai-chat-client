@@ -75,13 +75,22 @@ export class AxiosRequest {
 
         const { data, status } = response as AxiosResponse<ResponseData>;
 
-        const { code, message } = data;
+        let msg;
+        let statusCode;
 
-        const msg = message || '请求异常:' + JSON.stringify({ url: config?.url, code, message });
+        if (data && status) {
+          const { code, message } = data;
+
+          msg = message || '请求异常:' + JSON.stringify({ url: config?.url, code, message });
+          statusCode = config!.responseType === ResponseType.Blob ? status : code;
+        } else {
+          msg = error.message || '请求异常:' + JSON.stringify(error);
+          statusCode = error.code;
+        }
 
         // TODO: Add response error hook
 
-        const statusCode = config!.responseType === ResponseType.Blob ? status : code;
+        // const statusCode = config!.responseType === ResponseType.Blob ? status : code;
 
         return Promise.reject({
           code: statusCode,

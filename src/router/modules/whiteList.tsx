@@ -10,6 +10,7 @@ import MobileProfile from '@/views/mobile/profile';
 import MobileSyaverse from '@/views/mobile/syaverse';
 import MobileChatDetail from '@/views/mobile/chat-detail';
 import MobileChatVideo from '@/views/mobile/chat-video';
+import HeygenSessionList from '@/views/heygen/session-list';
 
 export const WhiteList: RouteWithMetaObject[] = [
   {
@@ -78,5 +79,11 @@ export const WhiteList: RouteWithMetaObject[] = [
     path: '/mobile/chat-video',
     element: <MobileChatVideo />,
     title: 'MobileChatVideo',
+  },
+  {
+    id: 'HeygenSessionList',
+    path: '/heygen/session-list',
+    element: <HeygenSessionList />,
+    title: 'HeygenSessionList',
   },
 ];

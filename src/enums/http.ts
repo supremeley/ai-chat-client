@@ -2,6 +2,7 @@
  * @description: Request result set
  */
 export enum ResultEnum {
+  HEYGEN_SUCCESS = 100,
   SUCCESS = 200,
   FAIL = 500,
   TIMEOUT = 401,
