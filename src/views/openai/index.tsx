@@ -31,6 +31,8 @@ import type { ChatCompletionContentPartImage } from 'openai/resources/index.mjs'
 import dayjs from 'dayjs';
 import type { HeygengSessionItem } from '@/api/heygen/type';
 import CoverImg from '@/assets/images/cover.webp';
+import { decrypt } from '@/utils';
+import { useLocalStorageState } from 'ahooks';
 
 const DefaultOpenAIKey =
   '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';
@@ -78,6 +80,11 @@ type REvent = RealtimeEvent & {
   // event: Record<string, any>;
 };
 
+interface TestUser {
+  username: string;
+  isUsed: boolean;
+}
+
 const OpenAIConnHeygen = () => {
   const wavRecorderRef = useRef<WavRecorder>(new WavRecorder({ sampleRate: 24000 }));
   const wavStreamPlayerRef = useRef<WavStreamPlayer>(new WavStreamPlayer({ sampleRate: 24000 }));
@@ -93,6 +100,62 @@ const OpenAIConnHeygen = () => {
   const heygenConfigRef = useRef<FormInstance<HeygenConfig>>(null);
 
   const [quota, setQuota] = useState(0);
+
+  const [usedUserList = [], setUsedUserList] = useLocalStorageState<TestUser[]>('test-user', {
+    defaultValue: [],
+  });
+
+  const location = useLocation();
+  const navigation = useNavigate();
+
+  const [needLog, setNeedLog] = useState(false);
+  const [username, setUsername] = useState('');
+
+  useEffect(() => {
+    checkUser();
+  }, []);
+
+  const checkUser = () => {
+    const decryptedText = location.search;
+
+    if (!decryptedText || decryptedText.length < 4) {
+      // TODO:
+      navigation('/404');
+      return;
+    }
+
+    const decryptedData = decrypt(decryptedText.slice(3));
+
+    if (decryptedData?.username === 'admin') {
+      return;
+    }
+
+    if (!decryptedData?.username) {
+      // 超时
+      console.log(1);
+      // TODO:
+      navigation('/404');
+    } else {
+      const res = usedUserList?.find((item) => item.username === decryptedData.username);
+
+      if (res?.isUsed) {
+        // TODO:
+        console.log(2);
+        navigation('/404');
+      } else {
+        setNeedLog(true);
+        setUsername(decryptedData.username);
+        // const userList = usedUserList;
+
+        // userList?.push({
+        //   username: decryptedData.username,
+        //   isUsed: true,
+        // });
+
+        // setUsedUserList(userList);
+      }
+    }
+  };
 
   useEffect(() => {
     heygenConfigRef.current?.setFieldsValue({
@@ -701,6 +764,11 @@ const OpenAIConnHeygen = () => {
   };
 
   const connect = async () => {
+    if (!canUse) {
+      Message.error('Your experience has arrived');
+      return;
+    }
+
     await initHeygen();
 
     await initLocalCamera();
@@ -734,6 +802,8 @@ const OpenAIConnHeygen = () => {
     return num.valueOf();
   };
 
+  const [canUse, setCanUse] = useState(true);
+
   useEffect(() => {
     // console.log('heygenStream', heygenStream);
     // console.log('mediaStream.current', mediaStream.current);
@@ -746,7 +816,26 @@ const OpenAIConnHeygen = () => {
         setIsHeygenLoading(false);
         // setDebug('Playing');
 
+        if (needLog) {
+          const userList = usedUserList;
+
+          userList?.push({
+            username: username,
+            isUsed: true,
+          });
+
+          setUsedUserList(userList);
+        }
+
         connectTimer.current = setInterval(() => {
+          console.log('connectTimer', second);
+
+          if (username !== 'admin' && second >= 180) {
+            disconnect();
+            setCanUse(false);
+            Message.error('Your experience has arrived');
+          }
+
           setSecond((second) => second + 1);
         }, 1000);
       };
