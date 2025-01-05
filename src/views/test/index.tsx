@@ -22,7 +22,7 @@ import StreamingAvatar, { AvatarQuality } from '@heygen/streaming-avatar';
 import { StreamingEvents, TaskMode, TaskType, VoiceEmotion } from '@heygen/streaming-avatar';
 import { RealtimeClient, type FormattedItem, type RealtimeEvent } from 'openai-realtime-api';
 
-import { heygen } from '@/api';
+import { heygen, openai } from '@/api';
 import { WavRecorder, WavStreamPlayer } from '@/utils/wavtools/index.js';
 import OpenAI from 'openai';
 import { RealtimePromptWorklet } from './realtime-prompt';
@@ -111,6 +111,7 @@ const OpenAIConnHeygen = () => {
       realtime_model: 'gpt-4o-realtime-preview',
     });
 
+    void refresh();
     // getHeygenRemainingQuota();
   }, []);
 
@@ -734,43 +735,7 @@ const OpenAIConnHeygen = () => {
     return num.valueOf();
   };
 
-  useEffect(() => {
-    // console.log('heygenStream', heygenStream);
-    // console.log('mediaStream.current', mediaStream.current);
-    if (heygenStream && mediaStream.current) {
-      mediaStream.current.srcObject = heygenStream;
-      mediaStream.current.onloadedmetadata = () => {
-        console.log('mediaStream.current', mediaStream.current);
-        mediaStream.current!.play();
-        setIsHeygenConnect(true);
-        setIsHeygenLoading(false);
-        // setDebug('Playing');
-
-        connectTimer.current = setInterval(() => {
-          setSecond((second) => second + 1);
-        }, 1000);
-      };
-    }
-  }, [mediaStream, heygenStream]);
-
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    console.log('message', message);
-
-    handleSpeakMessage(message);
-  }, [message]);
-
-  useEffect(() => {
-    return () => {
-      // cleanup; resets to defaults
-      realtimeClientRef.current?.reset();
-      stopHeygen();
-      stopLocalCamera();
-      timer.current && clearInterval(timer.current);
-      timer.current = null;
-    };
-  }, []);
 
   const [isCollapse, setIsCollapse] = useState(true);
 
@@ -925,30 +890,24 @@ const OpenAIConnHeygen = () => {
     }
   };
 
-  // const fetchOpenAiQuota = async () => {
-  //   try {
-  //     const res = await formRef.current?.validate();
+  const fetchOpenAiQuota = async () => {
+    try {
+      const res = await formRef.current?.validate();
 
-  //     const result = await openai.GetOpenaiQuota(res?.openai_key!);
-  //     console.log(result);
-  //     // if (!error && data) {
-  //     //   setQuota(data.remaining_quota);
-  //     // }
-  //   } catch (error) {
-  //     console.error('getHeygenToken error: ', error);
-  //     Message.error(JSON.stringify(error));
-  //   }
-  // };
-
-  const refresh = async () => {
-    await fetchHeygenRemainingQuota();
-    await fetchHeygenSessionData();
-    // await fetchOpenAiQuota();
+      const result = await openai.GetOpenaiQuota(res?.openai_key!);
+      console.log(result);
+      // if (!error && data) {
+      //   setQuota(data.remaining_quota);
+      // }
+    } catch (error) {
+      console.error('getHeygenToken error: ', error);
+      Message.error(JSON.stringify(error));
+    }
   };
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const refresh = async () => {
+    await fetchOpenAiQuota();
+  };
 
   const collapsedWidth = 60;
   const normalWidth = 300;
@@ -979,12 +938,6 @@ const OpenAIConnHeygen = () => {
   };
 
   const [isWelcome, setIsWelcome] = useState(true);
-
-  useEffect(() => {
-    setTimeout(() => {
-      setIsWelcome(false);
-    }, 2000);
-  }, []);
 
   return (
     <div className='page-container'>

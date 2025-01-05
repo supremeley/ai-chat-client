@@ -17,7 +17,8 @@ export const createOpenAiAxios = (opt?: CreateAxiosOptions) => {
 export const useHeygenAxios = createOpenAiAxios();
 
 enum Api {
-  GetOpenaiQuota = 'https://api.openai.com/dashboard/billing/credit_grants',
+  GetOpenaiQuota = 'https://api.openai.com/v1/account',
+  // GetOpenaiQuota = 'https://api.openai.com/dashboard/billing/credit_grants',
 }
 
 export const GetOpenaiQuota = (key: string) => {

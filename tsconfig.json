@@ -97,9 +97,6 @@
       "@views/*": [
         "src/views/*"
       ],
-      "@untitled folder/*": [
-        "src/assets/untitled folder/*"
-      ],
       "@images/*": [
         "src/assets/images/*"
       ]
